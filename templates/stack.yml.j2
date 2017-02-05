@@ -1,0 +1,1182 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: Intake API - {{ env }}
+
+Parameters:
+  ApplicationAMI:
+    Type: String
+    Description: Application Amazon Machine Image ID
+  ApplicationInstanceType:
+    Type: String
+    Description: Application EC2 Instance Type
+  ApplicationAutoscalingDesiredCount:
+    Type: Number
+    Description: Application AutoScaling Group Desired Count
+  ApplicationDockerImage:
+    Type: String
+    Description: Docker Image for Application
+  ApplicationDockerImageTag:
+    Type: String
+    Description: Docker Image Tag for Application
+    Default: latest
+  ApplicationKeyName:
+    Type: String
+    Description: EC2 Key Pair for Application SSH Access
+  ApplicationLoadBalancerPort:
+    Type: Number
+    Description: Application Front End HTTP Port
+  ApplicationPort:
+    Type: Number
+    Description: Application HTTP Port
+  ElasticsearchAMI:
+    Type: String
+    Description: Elasticsearch Amazon Machine Image ID
+  ElasticsearchInstanceType:
+    Type: String
+    Description: Elasticsearch EC2 Instance Type
+  ElasticsearchAutoscalingDesiredCount:
+    Type: Number
+    Description: Elasticsearch AutoScaling Group Desired Count
+  ElasticsearchDockerImage:
+    Type: String
+    Description: Docker Image for Elasticsearch
+  ElasticsearchDockerImageTag:
+    Type: String
+    Description: Docker Image Tag for Elasticsearch
+    Default: latest
+  ElasticsearchKeyName:
+    Type: String
+    Description: EC2 Key Pair for Elasticsearch SSH Access
+  ElasticsearchLoadBalancerPort:
+    Type: Number
+    Description: Elasticsearch Front End HTTP Port
+  ElasticsearchPort:
+    Type: Number
+    Description: Elasticsearch Port
+  Environment:
+    Type: String
+    Description: Stack Environment
+  LogRetention:
+    Type: Number
+    Description: Log retention in days
+  NginxDockerImage:
+    Type: String
+    Description: Docker Image for Nginx
+  NginxDockerImageTag:
+    Type: String
+    Description: Docker Image Tag for Nginx
+    Default: latest
+  DbStorage:
+    Type: Number
+    Description: Database Allocated Storage
+  DbInstanceType:
+    Type: String
+    Description: Database Instance Type
+  DbName:
+    Type: String
+    Description: Database Name
+  DbUsername:
+    Type: String
+    Description: Database Username
+  DbPassword:
+    Type: String
+    NoEcho: "True"
+    Description: Encrypted Database Password
+
+Resources:
+  ApplicationDnsRecord:
+    Type: "AWS::Route53::RecordSet"
+    Properties:
+      Name: 
+        Fn::Sub: "${Environment}-intake-api.ca.mycasebook.org"
+      TTL: "300"
+      HostedZoneName: "ca.mycasebook.org."
+      Type: "CNAME"
+      Comment: 
+        Fn::Sub: "Intake API Application - ${Environment}"
+      ResourceRecords: 
+        - Fn::Sub: "${ApplicationLoadBalancer.DNSName}"
+  ApplicationLoadBalancer:
+    Type: "AWS::ElasticLoadBalancingV2::LoadBalancer"
+    Properties:
+      Scheme: "internet-facing"
+      SecurityGroups:
+       - Ref: "ApplicationLoadBalancerSecurityGroup"
+      Subnets:
+        - Fn::ImportValue: DefaultPublicSubnetA
+        - Fn::ImportValue: DefaultPublicSubnetB
+      LoadBalancerAttributes: 
+        - Key: "deletion_protection.enabled"
+          Value: false
+        - Key: "idle_timeout.timeout_seconds"
+          Value: 30
+      Tags:
+        - Key: "Name"
+          Value:
+            Fn::Sub: ${AWS::StackName}-${Environment}-lb
+  ApplicationLoadBalancerApplicationListener:
+    Type: "AWS::ElasticLoadBalancingV2::Listener"
+    Properties:
+      Certificates:
+        - CertificateArn: 
+            Fn::ImportValue: CaMycasebookOrgCertArn
+      DefaultActions:
+        - TargetGroupArn: { "Ref": "IntakeApiServiceTargetGroup" }
+          Type: forward
+      LoadBalancerArn: { "Ref": "ApplicationLoadBalancer" }
+      Port: { "Ref": "ApplicationLoadBalancerPort" }
+      Protocol: "HTTPS"
+  IntakeApiServiceTargetGroup:
+    Type: "AWS::ElasticLoadBalancingV2::TargetGroup"
+    Properties:
+      VpcId:
+        Fn::ImportValue: "DefaultVpcId"
+      Protocol: "HTTP"
+      Port: { "Ref": "ApplicationPort" }
+      HealthCheckPath: "/api/v1/screenings"
+      TargetGroupAttributes:
+        - Key: "deregistration_delay.timeout_seconds"
+          Value: 60
+  ApplicationLoadBalancerSecurityGroup:
+    Type: "AWS::EC2::SecurityGroup"
+    Properties:
+      VpcId:
+        Fn::ImportValue: "DefaultVpcId"
+      GroupDescription: "Intake API Load Balancer Security Group"
+      SecurityGroupIngress:
+        - IpProtocol: "tcp"
+          FromPort: { "Ref": "ApplicationLoadBalancerPort" }
+          ToPort: { "Ref": "ApplicationLoadBalancerPort" }
+          CidrIp: "0.0.0.0/0"
+  ApplicationLoadBalancerToApplicationIngress:
+    Type: "AWS::EC2::SecurityGroupIngress"
+    Properties:
+      IpProtocol: "tcp"
+      FromPort: { "Ref": "ApplicationPort" }
+      ToPort: { "Ref": "ApplicationPort" }
+      GroupId: { "Ref": "ApplicationAutoscalingSecurityGroup" }
+      SourceSecurityGroupId: { "Ref": "ApplicationLoadBalancerSecurityGroup" }
+  ApplicationLoadBalancerToApplicationEgress:
+    Type: "AWS::EC2::SecurityGroupEgress"
+    Properties:
+      IpProtocol: "tcp"
+      FromPort: { "Ref": "ApplicationPort" }
+      ToPort: { "Ref": "ApplicationPort" }
+      GroupId: { "Ref": "ApplicationLoadBalancerSecurityGroup" }
+      DestinationSecurityGroupId: { "Ref": "ApplicationAutoscalingSecurityGroup" }
+  ApplicationAutoscaling:
+    Type: "AWS::AutoScaling::AutoScalingGroup"
+    DependsOn:
+      - DmesgLogGroup
+      - DockerLogGroup
+      - EcsAgentLogGroup
+      - EcsInitLogGroup
+      - MessagesLogGroup
+    CreationPolicy:
+      ResourceSignal:
+        Count: { "Ref": "ApplicationAutoscalingDesiredCount"}
+        Timeout: "PT15M"
+    UpdatePolicy:
+      AutoScalingRollingUpdate:
+        MinInstancesInService: { "Ref": "ApplicationAutoscalingDesiredCount"}
+        MinSuccessfulInstancesPercent: "100"
+        WaitOnResourceSignals: "true"
+        PauseTime: "PT15M"
+    Properties:
+      VPCZoneIdentifier:
+        - Fn::ImportValue: "DefaultMediumSubnetA"
+        - Fn::ImportValue: "DefaultMediumSubnetB"
+      LaunchConfigurationName: { "Ref" : "ApplicationAutoscalingLaunchConfiguration" }
+      MinSize: "0"
+      MaxSize: "4"
+      DesiredCapacity: { "Ref": "ApplicationAutoscalingDesiredCount"}
+      Tags:
+        - Key: Name
+          Value:
+            Fn::Sub: ${AWS::StackName}-instance
+          PropagateAtLaunch: "true"
+  ApplicationAutoscalingLaunchConfiguration:
+    Type: "AWS::AutoScaling::LaunchConfiguration"
+    Metadata:
+      AWS::CloudFormation::Init:
+        config:
+          commands:
+            10_first_run:
+              command: "sh firstrun.sh"
+              env:
+                STACK_NAME: { "Ref": "AWS::StackName" }
+                AUTOSCALING_GROUP: "ApplicationAutoscaling"
+                AWS_DEFAULT_REGION: { "Ref": "AWS::Region" }
+                ECS_CLUSTER: { "Ref": "ApplicationCluster" }
+                PROXY_URL:
+                  Fn::ImportValue: DefaultProxyURL
+              cwd: "/home/ec2-user/"
+          files:
+            /etc/ecs/ecs.config:
+              content: 
+                Fn::Sub: "ECS_CLUSTER=${ApplicationCluster}\n"
+    Properties:
+      ImageId: { "Ref": "ApplicationAMI" }
+      InstanceType: { "Ref": "ApplicationInstanceType" }
+      IamInstanceProfile: { "Ref": "ApplicationAutoscalingInstanceProfile" }
+      KeyName: { "Ref": "ApplicationKeyName" }
+      SecurityGroups:
+        - Ref: "ApplicationAutoscalingSecurityGroup"
+      UserData: 
+        Fn::Base64:
+          Fn::Join: ["\n", [
+            "#!/bin/bash",
+            "set -e",
+            "Fn::Join": ["", [
+              "Fn::Sub": "/opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource ApplicationAutoscalingLaunchConfiguration --region ${AWS::Region}",
+              "    --http-proxy ", "Fn::ImportValue": "DefaultProxyURL", 
+              "    --https-proxy ", "Fn::ImportValue": "DefaultProxyURL"
+            ] ],
+            "Fn::Join": ["", [
+              "Fn::Sub": "/opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource ApplicationAutoscaling --region ${AWS::Region}",
+              "    --http-proxy ", "Fn::ImportValue": "DefaultProxyURL", 
+              "    --https-proxy ", "Fn::ImportValue": "DefaultProxyURL"
+            ] ]
+          ] ]
+  ApplicationAutoscalingSecurityGroup:
+    Type: "AWS::EC2::SecurityGroup"
+    Properties:
+      VpcId:
+        Fn::ImportValue: "DefaultVpcId"
+      GroupDescription: "Intake API Security Group"
+      SecurityGroupIngress:
+        - IpProtocol: "tcp"
+          FromPort: 22
+          ToPort: 22
+          CidrIp:
+            Fn::ImportValue: "DefaultManagementSubnetACidr"
+        - IpProtocol: "tcp"
+          FromPort: 22
+          ToPort: 22
+          CidrIp:
+            Fn::ImportValue: "DefaultManagementSubnetBCidr"
+      SecurityGroupEgress:
+        - IpProtocol: "tcp"
+          FromPort: 3128
+          ToPort: 3128
+          DestinationSecurityGroupId:
+            Fn::ImportValue: DefaultProxySecurityGroup
+        - IpProtocol: "udp"
+          FromPort: 53
+          ToPort: 53
+          CidrIp:
+            Fn::Join: ["", [
+              "Fn::ImportValue": "DefaultVpcDnsServer", "/32"
+            ] ]
+        - IpProtocol: "udp"
+          FromPort: 123
+          ToPort: 123
+          CidrIp: 0.0.0.0/0
+  ApplicationToElasticsearchLoadBalancerIngress:
+    Type: "AWS::EC2::SecurityGroupIngress"
+    Properties:
+      IpProtocol: "tcp"
+      FromPort: { "Ref": "ElasticsearchLoadBalancerPort"}
+      ToPort: { "Ref": "ElasticsearchLoadBalancerPort"}
+      GroupId: { "Ref": "ElasticsearchLoadBalancerSecurityGroup" }
+      SourceSecurityGroupId: { "Ref": "ApplicationAutoscalingSecurityGroup" }
+  ApplicationToElasticsearchLoadBalancerEgress:
+    Type: "AWS::EC2::SecurityGroupEgress"
+    Properties:
+      IpProtocol: "tcp"
+      FromPort: { "Ref": "ElasticsearchLoadBalancerPort"}
+      ToPort: { "Ref": "ElasticsearchLoadBalancerPort"}
+      GroupId: { "Ref": "ApplicationAutoscalingSecurityGroup" }
+      DestinationSecurityGroupId: { "Ref": "ElasticsearchLoadBalancerSecurityGroup" }
+  ApplicationAutoscalingRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service: [ "ec2.amazonaws.com" ]
+            Action: [ "sts:AssumeRole" ]
+      Path: "/"
+      ManagedPolicyArns: []
+      Policies:
+        - {{ cf_cloudwatch_ec2_logs_policy | to_json }}
+        - PolicyName: "EC2ContainerInstancePolicy"
+          PolicyDocument:
+            Statement:
+              - Effect: "Allow"
+                Action:
+                  - "ecs:RegisterContainerInstance"
+                  - "ecs:DeregisterContainerInstance"
+                Resource: 
+                  Fn::Sub: "arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:cluster/${ApplicationCluster}"
+              - Effect: "Allow"
+                Action:
+                  - "ecs:DiscoverPollEndpoint"
+                  - "ecs:Submit*"
+                  - "ecs:Poll"
+                  - "ecs:StartTelemetrySession"
+                Resource: "*"
+              - Effect: "Allow"
+                Action: 
+                  - "ecr:BatchCheckLayerAvailability"
+                  - "ecr:BatchGetImage"
+                  - "ecr:GetDownloadUrlForLayer"
+                  - "ecr:GetAuthorizationToken"
+                Resource: "*"
+              - Effect: "Allow"
+                Action:
+                - "kms:Decrypt"
+                - "kms:DescribeKey"
+                Resource:
+                  Fn::ImportValue: "CfnMasterKeyArn"
+  ApplicationAutoscalingInstanceProfile:
+    Type: "AWS::IAM::InstanceProfile"
+    Properties:
+      Path: "/"
+      Roles: [ { "Ref": "ApplicationAutoscalingRole" } ]
+  ElasticsearchDnsRecord:
+    Type: "AWS::Route53::RecordSet"
+    Properties:
+      Name:
+        Fn::Join: ["", [
+          "Fn::Sub": "${Environment}-intake-api-es.",
+          "Fn::ImportValue": "DefaultVpcDomain"
+        ] ]
+      TTL: "300"
+      HostedZoneName:
+        Fn::ImportValue: DefaultVpcZone
+      Type: "CNAME"
+      Comment: 
+        Fn::Sub: "Intake API Elasticsearch - ${Environment}"
+      ResourceRecords: 
+        - Fn::Sub: "${ElasticsearchLoadBalancer.DNSName}"
+  ElasticsearchLoadBalancer:
+    Type: "AWS::ElasticLoadBalancingV2::LoadBalancer"
+    Properties:
+      Scheme: "internal"
+      SecurityGroups:
+       - Ref: "ElasticsearchLoadBalancerSecurityGroup"
+      Subnets:
+        - Fn::ImportValue: DefaultHighSubnetA
+        - Fn::ImportValue: DefaultHighSubnetB
+      LoadBalancerAttributes: 
+        - Key: "deletion_protection.enabled"
+          Value: false
+        - Key: "idle_timeout.timeout_seconds"
+          Value: 30
+      Tags:
+        - Key: "Name"
+          Value:
+            Fn::Sub: ${AWS::StackName}-${Environment}-elasticsearch-lb
+  ElasticsearchLoadBalancerListener:
+    Type: "AWS::ElasticLoadBalancingV2::Listener"
+    Properties:
+      DefaultActions:
+        - TargetGroupArn: { "Ref": "ElasticsearchServiceTargetGroup" }
+          Type: forward
+      LoadBalancerArn: { "Ref": "ElasticsearchLoadBalancer" }
+      Port: { "Ref": "ElasticsearchLoadBalancerPort" }
+      Protocol: "HTTP"
+  ElasticsearchServiceTargetGroup:
+    Type: "AWS::ElasticLoadBalancingV2::TargetGroup"
+    Properties:
+      VpcId:
+        Fn::ImportValue: "DefaultVpcId"
+      Protocol: "HTTP"
+      Port: { "Ref": "ElasticsearchPort" }
+      TargetGroupAttributes:
+        - Key: "deregistration_delay.timeout_seconds"
+          Value: 60
+  ElasticsearchLoadBalancerSecurityGroup:
+    Type: "AWS::EC2::SecurityGroup"
+    Properties:
+      VpcId:
+        Fn::ImportValue: "DefaultVpcId"
+      GroupDescription: "Intake API Elasticsearch Load Balancer Security Group"
+  ElasticsearchLoadBalancerToElasticsearchIngress:
+    Type: "AWS::EC2::SecurityGroupIngress"
+    Properties:
+      IpProtocol: "tcp"
+      FromPort: { "Ref": "ElasticsearchPort" }
+      ToPort: { "Ref": "ElasticsearchPort" }
+      GroupId: { "Ref": "ElasticsearchAutoscalingSecurityGroup" }
+      SourceSecurityGroupId: { "Ref": "ElasticsearchLoadBalancerSecurityGroup" }
+  ElasticsearchLoadBalancerToElasticsearchEgress:
+    Type: "AWS::EC2::SecurityGroupEgress"
+    Properties:
+      IpProtocol: "tcp"
+      FromPort: { "Ref": "ElasticsearchPort" }
+      ToPort: { "Ref": "ElasticsearchPort" }
+      GroupId: { "Ref": "ElasticsearchLoadBalancerSecurityGroup" }
+      DestinationSecurityGroupId: { "Ref": "ElasticsearchAutoscalingSecurityGroup" }
+  ElasticsearchAutoscaling:
+    Type: "AWS::AutoScaling::AutoScalingGroup"
+    DependsOn:
+      - ElasticsearchDmesgLogGroup
+      - ElasticsearchDockerLogGroup
+      - ElasticsearchEcsAgentLogGroup
+      - ElasticsearchEcsInitLogGroup
+      - ElasticsearchMessagesLogGroup
+    CreationPolicy:
+      ResourceSignal:
+        Count: { "Ref": "ElasticsearchAutoscalingDesiredCount"}
+        Timeout: "PT15M"
+    UpdatePolicy:
+      AutoScalingRollingUpdate:
+        MinInstancesInService: { "Ref": "ElasticsearchAutoscalingDesiredCount"}
+        MinSuccessfulInstancesPercent: "100"
+        WaitOnResourceSignals: "true"
+        PauseTime: "PT15M"
+    Properties:
+      VPCZoneIdentifier:
+        - Fn::ImportValue: "DefaultHighSubnetA"
+        - Fn::ImportValue: "DefaultHighSubnetB"
+      LaunchConfigurationName: { "Ref" : "ElasticsearchAutoscalingLaunchConfiguration" }
+      MinSize: "0"
+      MaxSize: "4"
+      DesiredCapacity: { "Ref": "ElasticsearchAutoscalingDesiredCount"}
+      Tags:
+        - Key: Name
+          Value:
+            Fn::Sub: ${AWS::StackName}-ElasticsearchAutoscaling-instance
+          PropagateAtLaunch: "true"
+  ElasticsearchAutoscalingLaunchConfiguration:
+    Type: "AWS::AutoScaling::LaunchConfiguration"
+    Metadata:
+      AWS::CloudFormation::Init:
+        config:
+          commands:
+            10_first_run:
+              command: "sh firstrun.sh"
+              env:
+                STACK_NAME: { "Ref": "AWS::StackName" }
+                AUTOSCALING_GROUP: "ElasticsearchAutoscaling"
+                AWS_DEFAULT_REGION: { "Ref": "AWS::Region" }
+                ECS_CLUSTER: { "Ref": "ElasticsearchCluster" }
+                PROXY_URL:
+                  Fn::ImportValue: DefaultProxyURL
+              cwd: "/home/ec2-user/"
+          files:
+            /etc/ecs/ecs.config:
+              content: 
+                Fn::Sub: "ECS_CLUSTER=${ElasticsearchCluster}\n"
+    Properties:
+      ImageId: { "Ref": "ElasticsearchAMI" }
+      InstanceType: { "Ref": "ElasticsearchInstanceType" }
+      IamInstanceProfile: { "Ref": "ElasticsearchAutoscalingInstanceProfile" }
+      KeyName: { "Ref": "ElasticsearchKeyName" }
+      SecurityGroups:
+        - Ref: "ElasticsearchAutoscalingSecurityGroup"
+      UserData: 
+        Fn::Base64:
+          Fn::Join: ["\n", [
+            "#!/bin/bash",
+            "set -e",
+            "Fn::Join": ["", [
+              "Fn::Sub": "/opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource ElasticsearchAutoscalingLaunchConfiguration --region ${AWS::Region}",
+              "    --http-proxy ", "Fn::ImportValue": "DefaultProxyURL", 
+              "    --https-proxy ", "Fn::ImportValue": "DefaultProxyURL"
+            ] ],
+            "Fn::Join": ["", [
+              "Fn::Sub": "/opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource ElasticsearchAutoscaling --region ${AWS::Region}",
+              "    --http-proxy ", "Fn::ImportValue": "DefaultProxyURL", 
+              "    --https-proxy ", "Fn::ImportValue": "DefaultProxyURL"
+            ] ]
+          ] ]
+  ElasticsearchAutoscalingSecurityGroup:
+    Type: "AWS::EC2::SecurityGroup"
+    Properties:
+      VpcId:
+        Fn::ImportValue: "DefaultVpcId"
+      GroupDescription: "Elasticsearch Security Group"
+      SecurityGroupIngress:
+        - IpProtocol: "tcp"
+          FromPort: 22
+          ToPort: 22
+          CidrIp:
+            Fn::ImportValue: "DefaultManagementSubnetACidr"
+        - IpProtocol: "tcp"
+          FromPort: 22
+          ToPort: 22
+          CidrIp:
+            Fn::ImportValue: "DefaultManagementSubnetBCidr"
+      SecurityGroupEgress:
+        - IpProtocol: "tcp"
+          FromPort: 3128
+          ToPort: 3128
+          DestinationSecurityGroupId:
+            Fn::ImportValue: DefaultProxySecurityGroup
+        - IpProtocol: "udp"
+          FromPort: 53
+          ToPort: 53
+          CidrIp:
+            Fn::Join: ["", [
+              "Fn::ImportValue": "DefaultVpcDnsServer", "/32"
+            ] ]
+        - IpProtocol: "udp"
+          FromPort: 123
+          ToPort: 123
+          CidrIp: 0.0.0.0/0
+  ElasticsearchAutoscalingRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service: [ "ec2.amazonaws.com" ]
+            Action: [ "sts:AssumeRole" ]
+      Path: "/"
+      ManagedPolicyArns: []
+      Policies:
+        - {{ cf_cloudwatch_ec2_logs_policy | to_json }}
+        - PolicyName: "EC2ContainerInstancePolicy"
+          PolicyDocument:
+            Statement:
+              - Effect: "Allow"
+                Action:
+                  - "ecs:RegisterContainerInstance"
+                  - "ecs:DeregisterContainerInstance"
+                Resource: 
+                  Fn::Sub: "arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:cluster/${ElasticsearchCluster}"
+              - Effect: "Allow"
+                Action:
+                  - "ecs:DiscoverPollEndpoint"
+                  - "ecs:Submit*"
+                  - "ecs:Poll"
+                  - "ecs:StartTelemetrySession"
+                Resource: "*"
+              - Effect: "Allow"
+                Action: 
+                  - "ecr:BatchCheckLayerAvailability"
+                  - "ecr:BatchGetImage"
+                  - "ecr:GetDownloadUrlForLayer"
+                  - "ecr:GetAuthorizationToken"
+                Resource: "*"
+  ElasticsearchAutoscalingInstanceProfile:
+    Type: "AWS::IAM::InstanceProfile"
+    Properties:
+      Path: "/"
+      Roles: [ { "Ref": "ElasticsearchAutoscalingRole" } ]
+  ApplicationDatabase:
+    Type: "AWS::RDS::DBInstance"
+    DeletionPolicy: "{{ config_db_deletion_policy }}"
+    Properties:
+      AllocatedStorage: { "Ref": "DbStorage" }
+      AutoMinorVersionUpgrade: "true"
+      BackupRetentionPeriod: "7"
+      PreferredBackupWindow: "9:00-11:00"
+      PreferredMaintenanceWindow: "sun:11:30-sun:13:00"
+      StorageType: "gp2"
+      DBInstanceClass: { "Ref": "DbInstanceType" }
+      Engine: "postgres"
+      EngineVersion: "9.5"
+      MasterUsername: { "Ref": "DbUsername" }
+      MasterUserPassword:
+        Fn::Sub: ${DbPasswordDecrypt.Plaintext}
+      DBSubnetGroupName: { "Ref": "ApplicationDatabaseSubnetGroup" }
+      VPCSecurityGroups:
+        - { "Ref" : "ApplicationDatabaseSecurityGroup" }
+{% if config_db_multi_az %}
+      MultiAZ: "True"
+{% else %}
+      MultiAZ: "False"
+      AvailabilityZone:
+        Fn::Sub: "${AWS::Region}a"
+{% endif %}
+      Tags:
+        - Key: "Name"
+          Value: "{{ 'intake-api-' + env + '-ApplicationDatabase' }}"
+  ApplicationDatabaseSubnetGroup:
+    Type: "AWS::RDS::DBSubnetGroup"
+    Properties:
+      DBSubnetGroupDescription: "{{ 'intake-api-' + env + '-ApplicationDatabase-db-subnet-group' }}"
+      SubnetIds: 
+        - Fn::ImportValue: DefaultHighSubnetA
+        - Fn::ImportValue: DefaultHighSubnetB
+      Tags:
+        - Key: "Name"
+          Value: "{{ 'intake-api-' + env + '-ApplicationDatabase-db-subnet-group' }}"
+  ApplicationDatabaseSecurityGroup:
+    Type: "AWS::EC2::SecurityGroup"
+    Properties:
+      GroupDescription: "{{ 'intake-api-' + env + '-ApplicationDatabase-sg' }}"
+      VpcId:
+        Fn::ImportValue: DefaultVpcId
+      SecurityGroupEgress:
+        - IpProtocol: "icmp"
+          FromPort: -1
+          ToPort: -1
+          CidrIp: "192.0.2.0/24"
+      Tags:
+        - Key: "Name"
+          Value: "{{ 'intake-api-' + env + '-ApplicationDatabase-sg' }}"
+  ApplicationAutoscalingToApplicationDatabaseIngressTcp5432:
+    Type: "AWS::EC2::SecurityGroupIngress"
+    Properties:
+      IpProtocol: "tcp"
+      FromPort: "5432"
+      ToPort: "5432"
+      GroupId: { "Ref": "ApplicationDatabaseSecurityGroup" }
+      SourceSecurityGroupId: { "Ref": "ApplicationAutoscalingSecurityGroup" }
+  ApplicationAutoscalingToApplicationDatabaseEgressTcp5432:
+    Type: "AWS::EC2::SecurityGroupEgress"
+    Properties:
+      IpProtocol: "tcp"
+      FromPort: "5432"
+      ToPort: "5432"
+      GroupId: { "Ref": "ApplicationAutoscalingSecurityGroup" }
+      DestinationSecurityGroupId: { "Ref": "ApplicationDatabaseSecurityGroup" }
+  ApplicationCluster:
+    Type: "AWS::ECS::Cluster"
+  ApplicationTaskDefinition:
+    Type: "AWS::ECS::TaskDefinition"
+    Properties:
+      NetworkMode: host
+      Volumes:
+        - Name: webroot
+          Host: {}
+      ContainerDefinitions:
+      - Name: intake-api
+        Image:
+          Fn::Sub: ${ApplicationDockerImage}:${ApplicationDockerImageTag}
+        MemoryReservation: 500
+        LogConfiguration:
+          LogDriver: awslogs
+          Options:
+            awslogs-group: 
+              Fn::Sub: ${AWS::StackName}/ecs/IntakeApiService/intake-api
+            awslogs-region: { "Ref": "AWS::Region" }
+        Environment:
+          - Name: RAILS_ENV
+            Value: production
+          - Name: PG_HOST
+            Value:
+              Fn::Sub: ${ApplicationDatabase.Endpoint.Address}
+          - Name: DATABASE_NAME
+            Value: { "Ref": "DbName" }
+          - Name: PG_USER
+            Value: { "Ref": "DbUsername" }
+          - Name: KMS_PG_PASSWORD
+            Value: { "Ref": "DbPassword" }
+          - Name: ELASTICSEARCH_URL
+            Value:
+              Fn::Join: ["", [
+                "http://",
+                "Fn::Sub": "${Environment}-intake-api-es.",
+                "Fn::ImportValue": "DefaultVpcDomain", ":",
+                "Ref": "ElasticsearchPort"
+              ] ]
+          - Name: AWS_DEFAULT_REGION
+            Value: { "Ref": "AWS::Region" }
+          - Name: http_proxy
+            Value:
+              Fn::ImportValue: "DefaultProxyURL"
+          - Name: https_proxy
+            Value:
+              Fn::ImportValue: "DefaultProxyURL"
+          - Name: no_proxy
+            Value:
+              Fn::Join: ["", [
+                "169.254.169.254,",
+                "Fn::Sub": "${Environment}-intake-api-es.",
+                "Fn::ImportValue": "DefaultVpcDomain"
+              ] ]
+          - Name: CLEAR_PROXY
+            Value: "true"
+        MountPoints:
+          - SourceVolume: webroot
+            ContainerPath: /tmp
+        Command:
+          - bundle
+          - exec
+          - puma
+          - -v
+          - -e
+          - production
+          - -b
+          - unix:///tmp/app.sock
+          - -C
+          - config/puma.rb
+      - Name: nginx
+        Image:
+          Fn::Sub: ${NginxDockerImage}:${NginxDockerImageTag}
+        MemoryReservation: 200
+        LogConfiguration:
+          LogDriver: awslogs
+          Options:
+            awslogs-group: 
+              Fn::Sub: ${AWS::StackName}/ecs/IntakeApiService/nginx
+            awslogs-region: { "Ref": "AWS::Region" }
+        PortMappings:
+        - ContainerPort: { "Ref": "ApplicationPort" }
+          Protocol: tcp
+        Environment:
+          - Name: HTTP_PORT 
+            Value: { "Ref": "ApplicationPort" }
+          - Name: WEB_ROOT
+            Value: /intake_api_prototype/public
+          - Name: UPSTREAM_URL
+            Value: unix:///tmp/app.sock
+          - Name: HEALTHCHECK
+            Value: 
+              Fn::Sub: curl -fs localhost:${ApplicationPort}/api/v1/screenings
+        MountPoints:
+          - SourceVolume: webroot
+            ContainerPath: /tmp
+        VolumesFrom:
+          - SourceContainer: intake-api
+            ReadOnly: "true"
+  AdhocTaskDefinition:
+    Type: "AWS::ECS::TaskDefinition"
+    Properties:
+      NetworkMode: host
+      ContainerDefinitions:
+      - Name: intake-api
+        Image:
+          Fn::Sub: ${ApplicationDockerImage}:${ApplicationDockerImageTag}
+        MemoryReservation: 100
+        LogConfiguration:
+          LogDriver: awslogs
+          Options:
+            awslogs-group: 
+              Fn::Sub: ${AWS::StackName}/ecs/IntakeApiService/adhoc
+            awslogs-region: { "Ref": "AWS::Region" }
+        Environment:
+          - Name: RAILS_ENV
+            Value: production
+          - Name: PG_HOST
+            Value:
+              Fn::Sub: ${ApplicationDatabase.Endpoint.Address}
+          - Name: DATABASE_NAME
+            Value: { "Ref": "DbName" }
+          - Name: PG_USER
+            Value: { "Ref": "DbUsername" }
+          - Name: KMS_PG_PASSWORD
+            Value: { "Ref": "DbPassword" }
+          - Name: ELASTICSEARCH_URL
+            Value:
+              Fn::Join: ["", [
+                "http://",
+                "Fn::Sub": "${Environment}-intake-api-es.",
+                "Fn::ImportValue": "DefaultVpcDomain", ":",
+                "Ref": "ElasticsearchPort"
+              ] ]
+          - Name: AWS_DEFAULT_REGION
+            Value: { "Ref": "AWS::Region" }
+          - Name: http_proxy
+            Value:
+              Fn::ImportValue: "DefaultProxyURL"
+          - Name: https_proxy
+            Value:
+              Fn::ImportValue: "DefaultProxyURL"
+          - Name: no_proxy
+            Value:
+              Fn::Join: ["", [
+                "169.254.169.254,",
+                "Fn::Sub": "${Environment}-intake-api-es.",
+                "Fn::ImportValue": "DefaultVpcDomain"
+              ] ]
+          - Name: CLEAR_PROXY
+            Value: "true"
+  IntakeApiService:
+    Type: "AWS::ECS::Service"
+    DependsOn:
+      - ApplicationLoadBalancer
+      - ApplicationAutoscaling
+      - IntakeApiServiceLogGroup
+      - IntakeApiNginxLogGroup
+      - DbCreateTask
+      - DbMigrateTask
+      - SearchMigrateTask
+      - SearchReindexTask
+    Properties:
+      Cluster: { "Ref": "ApplicationCluster" }
+      TaskDefinition: { "Ref": "ApplicationTaskDefinition" }
+      DesiredCount: { "Ref": "ApplicationAutoscalingDesiredCount"}
+      DeploymentConfiguration:
+          MinimumHealthyPercent: 50
+          MaximumPercent: 200
+      LoadBalancers:
+        - ContainerName: nginx
+          ContainerPort: { "Ref": "ApplicationPort" }
+          TargetGroupArn: { "Ref": "IntakeApiServiceTargetGroup" }
+      Role: { "Ref": "EcsServiceRole" }
+  EcsServiceRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal: 
+              Service: [ "ecs.amazonaws.com" ]
+            Action: [ "sts:AssumeRole" ]
+      Path: "/"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceRole"
+  ElasticsearchCluster:
+    Type: "AWS::ECS::Cluster"
+  ElasticsearchTaskDefinition:
+    Type: "AWS::ECS::TaskDefinition"
+    Properties:
+      NetworkMode: host
+      Volumes:
+        - Name: esdata
+          Host: 
+            SourcePath: /ecs/esdata
+      ContainerDefinitions:
+      - Name: elasticsearch
+        Image:
+          Fn::Sub: ${ElasticsearchDockerImage}:${ElasticsearchDockerImageTag}
+        MemoryReservation: 500
+        LogConfiguration:
+          LogDriver: awslogs
+          Options:
+            awslogs-group: 
+              Fn::Sub: ${AWS::StackName}/ecs/ElasticsearchService/elasticsearch
+            awslogs-region: { "Ref": "AWS::Region" }
+        PortMappings:
+        - ContainerPort: { "Ref": "ElasticsearchPort" }
+          Protocol: tcp
+        MountPoints:
+          - SourceVolume: esdata
+            ContainerPath: /var/lib/elasticsearch/data
+  ElasticsearchService:
+    Type: "AWS::ECS::Service"
+    DependsOn:
+      - ApplicationLoadBalancer
+      - ElasticsearchAutoscaling
+      - ElasticsearchServiceLogGroup
+    Properties:
+      Cluster: { "Ref": "ElasticsearchCluster" }
+      TaskDefinition: { "Ref": "ElasticsearchTaskDefinition" }
+      DesiredCount: { "Ref": "ElasticsearchAutoscalingDesiredCount"}
+      DeploymentConfiguration:
+          MinimumHealthyPercent: 0
+          MaximumPercent: 200
+      LoadBalancers:
+        - ContainerName: elasticsearch
+          ContainerPort: { "Ref": "ElasticsearchPort" }
+          TargetGroupArn: { "Ref": "ElasticsearchServiceTargetGroup" }
+      Role: { "Ref": "EcsServiceRole" }
+  DbCreateTask:
+    Type: "Custom::ECSTask"
+    DependsOn:
+      - ApplicationAutoscaling
+      - ApplicationDatabase
+    Properties:
+      ServiceToken:
+        Fn::Sub: ${EcsTaskRunner.Arn}
+      Cluster: { "Ref": "ApplicationCluster" }
+      TaskDefinition: { "Ref": "AdhocTaskDefinition" }
+      Count: 1
+      Overrides:
+        containerOverrides:
+          - name: intake-api
+            command:
+              - bundle
+              - exec
+              - rake
+              - db:create
+  DbMigrateTask:
+    Type: "Custom::ECSTask"
+    DependsOn:
+      - DbCreateTask
+    Properties:
+      ServiceToken:
+        Fn::Sub: ${EcsTaskRunner.Arn}
+      Cluster: { "Ref": "ApplicationCluster" }
+      TaskDefinition: { "Ref": "AdhocTaskDefinition" }
+      Count: 1
+      Overrides:
+        containerOverrides:
+          - name: intake-api
+            command:
+              - bundle
+              - exec
+              - rake
+              - db:migrate
+  SearchMigrateTask:
+    Type: "Custom::ECSTask"
+    DependsOn:
+      - DbMigrateTask
+      - ElasticsearchService
+    Properties:
+      ServiceToken:
+        Fn::Sub: ${EcsTaskRunner.Arn}
+      Cluster: { "Ref": "ApplicationCluster" }
+      TaskDefinition: { "Ref": "AdhocTaskDefinition" }
+      Count: 1
+      Overrides:
+        containerOverrides:
+          - name: intake-api
+            command:
+              - bundle
+              - exec
+              - rake
+              - search:migrate
+  SearchReindexTask:
+    Type: "Custom::ECSTask"
+    DependsOn:
+      - SearchMigrateTask
+    Properties:
+      ServiceToken:
+        Fn::Sub: ${EcsTaskRunner.Arn}
+      Cluster: { "Ref": "ApplicationCluster" }
+      TaskDefinition: { "Ref": "AdhocTaskDefinition" }
+      Count: 1
+      Overrides:
+        containerOverrides:
+          - name: intake-api
+            command:
+              - bundle
+              - exec
+              - rake
+              - search:reindex
+  DmesgLogGroup:
+    Type: "AWS::Logs::LogGroup"
+    DeletionPolicy: "{{ config_log_deletion_policy }}"
+    Properties:
+      LogGroupName: 
+        Fn::Sub: ${AWS::StackName}/ec2/ApplicationAutoscaling/var/log/dmesg
+      RetentionInDays: { "Ref": "LogRetention" }
+  DockerLogGroup:
+    Type: "AWS::Logs::LogGroup"
+    DeletionPolicy: "{{ config_log_deletion_policy }}"
+    Properties:
+      LogGroupName:
+        Fn::Sub: ${AWS::StackName}/ec2/ApplicationAutoscaling/var/log/docker
+      RetentionInDays: { "Ref": "LogRetention" }
+  EcsAgentLogGroup:
+    Type: "AWS::Logs::LogGroup"
+    DeletionPolicy: "{{ config_log_deletion_policy }}"
+    Properties:
+      LogGroupName: 
+        Fn::Sub: ${AWS::StackName}/ec2/ApplicationAutoscaling/var/log/ecs/ecs-agent
+      RetentionInDays: { "Ref": "LogRetention" }
+  EcsInitLogGroup:
+    Type: "AWS::Logs::LogGroup"
+    DeletionPolicy: "{{ config_log_deletion_policy }}"
+    Properties:
+      LogGroupName:
+        Fn::Sub: ${AWS::StackName}/ec2/ApplicationAutoscaling/var/log/ecs/ecs-init
+      RetentionInDays: { "Ref": "LogRetention" }
+  MessagesLogGroup:
+    Type: "AWS::Logs::LogGroup"
+    DeletionPolicy: "{{ config_log_deletion_policy }}"
+    Properties:
+      LogGroupName:
+        Fn::Sub: ${AWS::StackName}/ec2/ApplicationAutoscaling/var/log/messages
+      RetentionInDays: { "Ref": "LogRetention" }
+  IntakeApiServiceLogGroup:
+    Type: "AWS::Logs::LogGroup"
+    DeletionPolicy: "{{ config_log_deletion_policy }}"
+    Properties:
+      LogGroupName:
+        Fn::Sub: ${AWS::StackName}/ecs/IntakeApiService/intake-api
+      RetentionInDays: { "Ref": "LogRetention" }
+  IntakeApiNginxLogGroup:
+    Type: "AWS::Logs::LogGroup"
+    DeletionPolicy: "{{ config_log_deletion_policy }}"
+    Properties:
+      LogGroupName:
+        Fn::Sub: ${AWS::StackName}/ecs/IntakeApiService/nginx
+      RetentionInDays: { "Ref": "LogRetention" }
+  IntakeApiAdhocLogGroup:
+    Type: "AWS::Logs::LogGroup"
+    DeletionPolicy: "{{ config_log_deletion_policy }}"
+    Properties:
+      LogGroupName:
+        Fn::Sub: ${AWS::StackName}/ecs/IntakeApiService/adhoc
+      RetentionInDays: { "Ref": "LogRetention" }
+  ElasticsearchDmesgLogGroup:
+    Type: "AWS::Logs::LogGroup"
+    DeletionPolicy: "{{ config_log_deletion_policy }}"
+    Properties:
+      LogGroupName: 
+        Fn::Sub: ${AWS::StackName}/ec2/ElasticsearchAutoscaling/var/log/dmesg
+      RetentionInDays: { "Ref": "LogRetention" }
+  ElasticsearchDockerLogGroup:
+    Type: "AWS::Logs::LogGroup"
+    DeletionPolicy: "{{ config_log_deletion_policy }}"
+    Properties:
+      LogGroupName:
+        Fn::Sub: ${AWS::StackName}/ec2/ElasticsearchAutoscaling/var/log/docker
+      RetentionInDays: { "Ref": "LogRetention" }
+  ElasticsearchEcsAgentLogGroup:
+    Type: "AWS::Logs::LogGroup"
+    DeletionPolicy: "{{ config_log_deletion_policy }}"
+    Properties:
+      LogGroupName: 
+        Fn::Sub: ${AWS::StackName}/ec2/ElasticsearchAutoscaling/var/log/ecs/ecs-agent
+      RetentionInDays: { "Ref": "LogRetention" }
+  ElasticsearchEcsInitLogGroup:
+    Type: "AWS::Logs::LogGroup"
+    DeletionPolicy: "{{ config_log_deletion_policy }}"
+    Properties:
+      LogGroupName:
+        Fn::Sub: ${AWS::StackName}/ec2/ElasticsearchAutoscaling/var/log/ecs/ecs-init
+      RetentionInDays: { "Ref": "LogRetention" }
+  ElasticsearchMessagesLogGroup:
+    Type: "AWS::Logs::LogGroup"
+    DeletionPolicy: "{{ config_log_deletion_policy }}"
+    Properties:
+      LogGroupName:
+        Fn::Sub: ${AWS::StackName}/ec2/ElasticsearchAutoscaling/var/log/messages
+      RetentionInDays: { "Ref": "LogRetention" }
+  ElasticsearchServiceLogGroup:
+    Type: "AWS::Logs::LogGroup"
+    DeletionPolicy: "{{ config_log_deletion_policy }}"
+    Properties:
+      LogGroupName:
+        Fn::Sub: ${AWS::StackName}/ecs/ElasticsearchService/elasticsearch
+      RetentionInDays: { "Ref": "LogRetention" }
+  DbPasswordDecrypt:
+    Type: "Custom::KMSDecrypt"
+    Properties:
+      ServiceToken: 
+        Fn::Sub: ${KMSDecrypter.Arn}
+      Ciphertext: { "Ref": "DbPassword" }
+  KMSDecrypterLogGroup:
+    Type: "AWS::Logs::LogGroup"
+    DeletionPolicy: "{{ config_log_deletion_policy }}"
+    Properties:
+      LogGroupName:
+        Fn::Sub: /aws/lambda/${AWS::StackName}-cfnKmsDecrypt
+      RetentionInDays: { "Ref": "LogRetention" }
+  KMSDecrypter:
+    Type: "AWS::Lambda::Function"
+    DependsOn:
+      - "KMSDecrypterLogGroup"
+    Properties:
+      Description: 
+        Fn::Sub: "${AWS::StackName} KMS Decrypter"
+      Handler: "cfn_kms_decrypt.handler"
+      MemorySize: 128
+      Runtime: "python2.7"
+      Timeout: 300
+      Role: 
+        Fn::Sub: ${KMSDecrypterRole.Arn}
+      FunctionName: 
+        Fn::Sub: "${AWS::StackName}-cfnKmsDecrypt"
+      Code:
+        S3Bucket: 
+          Fn::Sub: "${AWS::AccountId}-cfn-lambda"
+        S3Key: "cfnKmsDecrypt.zip"
+        S3ObjectVersion: "86jHvErMu.CpTjqBvSlJabgr22pYGa9S"
+  KMSDecrypterRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      Path: "/"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+        - Effect: "Allow"
+          Principal: {"Service": "lambda.amazonaws.com"}
+          Action: [ "sts:AssumeRole" ]
+      Policies:
+      - PolicyName: "KMSDecrypterPolicy"
+        PolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+          - Sid: "Decrypt"
+            Effect: "Allow"
+            Action:
+            - "kms:Decrypt"
+            - "kms:DescribeKey"
+            Resource:
+              Fn::ImportValue: "CfnMasterKeyArn"
+          - Sid: "ManageLambdaLogs"
+            Effect: "Allow"
+            Action:
+            - "logs:CreateLogGroup"
+            - "logs:CreateLogStream"
+            - "logs:PutLogEvents"
+            - "logs:PutRetentionPolicy"
+            - "logs:PutSubscriptionFilter"
+            - "logs:DescribeLogStreams"
+            - "logs:DeleteLogGroup"
+            - "logs:DeleteRetentionPolicy"
+            - "logs:DeleteSubscriptionFilter"
+            Resource: 
+              Fn::Sub: "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${AWS::StackName}-cfnKmsDecrypt:*:*"
+  EcsTaskRunnerLogGroup:
+    Type: "AWS::Logs::LogGroup"
+    DeletionPolicy: "{{ config_log_deletion_policy }}"
+    Properties:
+      LogGroupName:
+        Fn::Sub: /aws/lambda/${AWS::StackName}-cfnEcsTasks
+      RetentionInDays: { "Ref": "LogRetention" }
+  EcsTaskRunner:
+    Type: "AWS::Lambda::Function"
+    DependsOn:
+      - "EcsTaskRunnerLogGroup"
+    Properties:
+      Description: 
+        Fn::Sub: "${AWS::StackName} ECS Task Runner"
+      Handler: "ecs_tasks.handler"
+      MemorySize: 128
+      Runtime: "python2.7"
+      Timeout: 300
+      Role: 
+        Fn::Sub: ${EcsTaskRunnerRole.Arn}
+      FunctionName: 
+        Fn::Sub: "${AWS::StackName}-cfnEcsTasks"
+      Code:
+        S3Bucket: 
+          Fn::Sub: "${AWS::AccountId}-cfn-lambda"
+        S3Key: "cfnEcsTasks.zip"
+        S3ObjectVersion: "gyujkgVKoH.NVeeuLYTi_7n_NUburwa4"
+  EcsTaskRunnerRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      Path: "/"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+        - Effect: "Allow"
+          Principal: {"Service": "lambda.amazonaws.com"}
+          Action: [ "sts:AssumeRole" ]
+      Policies:
+      - PolicyName: "ECSPermissions"
+        PolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+          - Sid: "TaskDefinition"
+            Effect: "Allow"
+            Action:
+            - "ecs:DescribeTaskDefinition"
+            Resource: "*"
+          - Sid: "EcsTasks"
+            Effect: "Allow"
+            Action:
+            - "ecs:DescribeTasks"
+            - "ecs:ListTasks"
+            - "ecs:RunTask"
+            - "ecs:StartTask"
+            - "ecs:StopTask"
+            - "ecs:DescribeContainerInstances"
+            - "ecs:ListContainerInstances"
+            Resource: "*"
+            Condition:
+              ArnEquals:
+                ecs:cluster: 
+                  Fn::Sub: "arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:cluster/${ApplicationCluster}"
+          - Sid: "ManageLambdaLogs"
+            Effect: "Allow"
+            Action:
+            - "logs:CreateLogGroup"
+            - "logs:CreateLogStream"
+            - "logs:PutLogEvents"
+            - "logs:PutRetentionPolicy"
+            - "logs:PutSubscriptionFilter"
+            - "logs:DescribeLogStreams"
+            - "logs:DeleteLogGroup"
+            - "logs:DeleteRetentionPolicy"
+            - "logs:DeleteSubscriptionFilter"
+            Resource: 
+              Fn::Sub: "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${AWS::StackName}-cfnEcsTasks:*:*"

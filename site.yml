@@ -1,0 +1,11 @@
+- name: Assume Role
+  hosts: "{{ env }}"
+  gather_facts: no
+  roles:
+    - aws-sts
+
+- name: Stack Deployment
+  hosts: "{{ env }}"
+  environment: "{{ sts_creds }}"
+  roles:
+    - aws-cloudformation

@@ -1,0 +1,43 @@
+# STS settings
+sts_role_arn: arn:aws:iam::429614120872:role/remoteAdmin
+
+# Application settings
+config_application_keyname: admin-shared-key
+config_application_instance_type: t2.micro
+config_application_desired_count: 2
+config_application_ami: ami-e215a782
+config_application_image: 429614120872.dkr.ecr.us-west-2.amazonaws.com/cwds/intake-api
+config_application_tag: latest
+config_application_frontend_port: 443
+config_application_port: 3000
+
+# Nginx settings
+config_nginx_image: 429614120872.dkr.ecr.us-west-2.amazonaws.com/cwds/nginx
+config_nginx_tag: latest
+
+# Elasticsearch settings
+config_es_keyname: admin-shared-key
+config_es_instance_type: t2.micro
+config_es_desired_count: 1
+config_es_ami: ami-e215a782
+config_es_image: 429614120872.dkr.ecr.us-west-2.amazonaws.com/cwds/elasticsearch
+config_es_tag: 2.4
+config_es_frontend_port: 9200
+config_es_port: 9200
+
+
+# Database settings
+config_db_multi_az: false
+config_db_deletion_policy: Delete
+config_db_storage: 10
+config_db_instance_type: db.t2.micro
+config_db_name: casebook_api_production
+config_db_username: casebook
+config_db_password: AQECAHgohc0dbuzR1L3lEdEkDC96PMYUEV9nITogJU2vbocgQAAAAG4wbAYJKoZIhvcNAQcGoF8wXQIBADBYBgkqhkiG9w0BBwEwHgYJYIZIAWUDBAEuMBEEDJ0IlbZMA9NeCR+P4QIBEIArRwg3bizT0FgpH3WiznpohfgPBRRohoD1wSwAnCJbNZwG3XuICebZ5PojuQ==
+
+# Log settings
+config_log_retention: 30
+config_log_deletion_policy: Delete
+ 
+# Test secret
+config_application_secret: AQECAHgohc0dbuzR1L3lEdEkDC96PMYUEV9nITogJU2vbocgQAAAAGowaAYJKoZIhvcNAQcGoFswWQIBADBUBgkqhkiG9w0BBwEwHgYJYIZIAWUDBAEuMBEEDB4uW3mVBu3L8ErR1AIBEIAnSkLisBBGibq5wjbMR/0Ew9QDAbP37gXU8jdOYYZFzNOO8IwbnvHS
