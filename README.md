@@ -20,6 +20,31 @@ A CloudFormation stack is generated for each environment that includes the follo
 - `KMSDecrypter` - CloudFormation custom resource Lambda function that decrypts KMS-encrypted variables.  This is used to pass the configured database password securely to the `ApplicationDatabase` resource
 - `EcsTaskRunner` - CloudFormation custom resource Lambda function that executes ECS tasks defined in the `DbCreateTask`, `DbMigrateTask`, `SearchMigrateTask`, `SearchReindexTask` resources
 
+## Caveats
+
+The Ruby on Rails Elasticsearch client included in the Intake API application does not honour the `no_proxy` environment variable setting, meaning you cannot bypass the Elasticsearch URL when an HTTP proxy is configured.
+
+As the Intake API application is deployed in a private subnet with no direct Internet access, an HTTP proxy must be used for any communications that the Intake API container requires to the Internet.
+
+At present the Intake API container includes an entrypoint script that communicates with the AWS KMS service (which has a public API endpoint) to [inject decrypted secrets into the environment](#consuming-secrets-in-containers), hence an HTTP proxy is required for the container.  However this breaks Intake API communication with Elasticsearch, as all Elasticsearch communications are attempted via the HTTP proxy, which is whitelisted to only permit communications to AWS service endpoints.
+
+To overcome these issues, the entrypoint script checks for the existence of an environment variable called `CLEAR_PROXY`, which unsets all proxy related environment variables:
+
+```
+...
+...
+if [[ -n ${CLEAR_PROXY} ]]
+then
+  unset http_proxy https_proxy no_proxy HTTP_PROXY HTTPS_PROXY NO_PROXY
+fi
+...
+...
+```
+
+This is performed AFTER the script communicates with the KMS service, ensuring the KMS secret injection feature works, but then allowing the application to communicate directly with Elasticsearch.
+
+> IMPORTANT: This approach assumes the Intake API application only communicates with a private Elasticsearch instance and does not require Internet access.  This approach will not work if the application requires access to the Internet.
+
 ## Quick Start
 
 ### Installing/Updating Ansible Roles
@@ -201,3 +226,116 @@ config_application_instance_type: t2.large
 
 ```
 
+## Generating Secrets
+
+This playbook includes secrets that are encrypted using the AWS Key Management Service (KMS).  Secrets management is based upon the following assumptions:
+
+- An existing KMS key already exists.  
+- You have permissions to encrypt using the KMS key to create secrets
+- Any resources that need to decrypt the secret have permissions to decrypt using the KMS key
+
+### Encrypting a secret
+
+The following example demonstrates encrypting a secret using the AWS CLI:
+
+```
+$ aws kms encryption --key-id 3ea941bf-ee54-4941-8f77-f1dd417667cd --plaintext 'my-super-secret-password'
+{
+    "KeyId": "arn:aws:kms:us-west-2:429614120872:key/3ea941bf-ee54-4941-8f77-f1dd417667cd",
+    "CiphertextBlob": "AQECAHgohc0dbuzR1L3lEdEkDC96PMYUEV9nITogJU2vbocgQAAAAHYwdAYJKoZIhvcNAQcGoGcwZQIBADBgBgkqhkiG9w0BBwEwHgYJYIZIAWUDBAEuMBEEDHKUCiAJWXT2aWTwhgIBEIAzedFwZHu6M1i2qyKLotQuSgba5RRNT0uxW0oUXPJCUxN+vDfrQW+GuJUWrFtEuDgYfcf5"
+}
+```
+
+You should then use the `CiphertextBlob` property from the AWS CLI output as the value for your secret configuration variable.
+
+e.g. in `group_vars/<env>/vars.yml`:
+
+```
+# Application settings
+config_db_username: myapp
+config_db_password: AQECAHgohc0dbuzR1L3lEdEkDC96PMYUEV9nITogJU2vbocgQAAAAHYwdAYJKoZIhvcNAQcGoGcwZQIBADBgBgkqhkiG9w0BBwEwHgYJYIZIAWUDBAEuMBEEDHKUCiAJWXT2aWTwhgIBEIAzedFwZHu6M1i2qyKLotQuSgba5RRNT0uxW0oUXPJCUxN+vDfrQW+GuJUWrFtEuDgYfcf5
+...
+...
+```
+
+### Consuming secrets
+
+Most AWS services do not include support for processing KMS encrypted variables, therefore you need a helper CloudFormation custom resource that can decrypt a given secret and return the plaintext value to other AWS resources.
+
+This playbook already includes a [`KMSDecrypter` Lambda function](https://github.com/Casecommons/lambda-cfn-kms) that provides this capability.
+
+With the supporting `KMSDecrypter` resource in place, you must then create a CloudFormation custom resource for each secret, and then reference the secret custom resource for any AWS resource variable that requires the plaintext value of your secret.
+
+For example in the following configuration snippet, notice the following:
+
+- The `DbPassword` stack input references the ciphertext defined in `config_db_password`
+- The `DbPasswordDecrypt` resource `ServiceToken` property references the `KMSDecrypter` resource ARN
+- The `DbPasswordDecrypt` resource passes the `CipherText` property to `KMSDecrypter`, which is the ciphertext generated previously and passed to the `DbPassword` input parameter.
+- The `ApplicationDatabase` resource then references the `DbPasswordDecrypt` resource to obtain the plain text value of the secret.
+
+```
+# From group_vars/<env>/vars.yml
+...
+...
+config_db_password: AQECAHgohc0dbuzR1L3lEdEkDC96PMYUEV9nITogJU2vbocgQAAAAHYwdAYJKoZIhvcNAQcGoGcwZQIBADBgBgkqhkiG9w0BBwEwHgYJYIZIAWUDBAEuMBEEDHKUCiAJWXT2aWTwhgIBEIAzedFwZHu6M1i2qyKLotQuSgba5RRNT0uxW0oUXPJCUxN+vDfrQW+GuJUWrFtEuDgYfcf5
+...
+...
+
+# From group_vars/all/vars.yml
+...
+...
+cf_stack_inputs:
+  DbPassword: "{{ config_db_password }}"
+...
+...
+
+# From templates/stack.yml.j2
+...
+...
+Resources:
+...
+...
+  DbPasswordDecrypt:
+    Type: "Custom::KMSDecrypt"
+    Properties:
+      ServiceToken: 
+        Fn::Sub: ${KMSDecrypter.Arn}
+      Ciphertext: { "Ref": "DbPassword" }
+  ApplicationDatabase:
+    Type: "AWS::RDS::DBInstance"
+    Properties:
+      MasterUserPassword:
+        Fn::Sub: ${DbPasswordDecrypt.Plaintext}
+...
+...
+```
+
+### Consuming secrets in Containers
+
+The base image for the Intake API Docker image used by the `ApplicationTaskDefinition` includes an entrypoint script that will automatically attempt to decrypt environment variable values prefixed using `KMS_xxxx_xxxx` and inject a new environment variable with the `KMS_` prefix removed and the decrypted plaintext set to the new environment variable value.
+
+For example, the `ApplicationTaskDefinition` resource includes the following environment variable configuration:
+
+# From templates/stack.yml.j2
+...
+...
+Resources:
+...
+...
+  ApplicationTaskDefinition:
+    Type: "AWS::ECS::TaskDefinition"
+    Properties:
+      ...
+      ...
+      ContainerDefinitions:
+      - Name: intake-api
+        ...
+        ...
+        Environment:
+          - Name: KMS_PG_PASSWORD
+            Value: { "Ref": "DbPassword" }
+...
+...
+```
+
+At container startup, the entrypoint script with decrypt the value of `KMS_PG_PASSWORD` and export a new environment variable `PG_PASSWORD` with the plaintext value of the `DbPassword` input parameter ciphertext.
