@@ -242,7 +242,7 @@ The following example demonstrates encrypting a secret using the AWS CLI:
 $ aws kms encryption --key-id 3ea941bf-ee54-4941-8f77-f1dd417667cd --plaintext 'my-super-secret-password'
 {
     "KeyId": "arn:aws:kms:us-west-2:429614120872:key/3ea941bf-ee54-4941-8f77-f1dd417667cd",
-    "CiphertextBlob": "AQECAHgohc0dbuzR1L3lEdEkDC96PMYUEV9nITogJU2vbocgQAAAAHYwdAYJKoZIhvcNAQcGoGcwZQIBADBgBgkqhkiG9w0BBwEwHgYJYIZIAWUDBAEuMBEEDHKUCiAJWXT2aWTwhgIBEIAzedFwZHu6M1i2qyKLotQuSgba5RRNT0uxW0oUXPJCUxN+vDfrQW+GuJUWrFtEuDgYfcf5"
+    "CiphertextBlob": "AQECAHgohc0dbuzR1L3lEdEkDC96PMYUEV9nITog"
 }
 ```
 
@@ -253,7 +253,7 @@ e.g. in `group_vars/<env>/vars.yml`:
 ```
 # Application settings
 config_db_username: myapp
-config_db_password: AQECAHgohc0dbuzR1L3lEdEkDC96PMYUEV9nITogJU2vbocgQAAAAHYwdAYJKoZIhvcNAQcGoGcwZQIBADBgBgkqhkiG9w0BBwEwHgYJYIZIAWUDBAEuMBEEDHKUCiAJWXT2aWTwhgIBEIAzedFwZHu6M1i2qyKLotQuSgba5RRNT0uxW0oUXPJCUxN+vDfrQW+GuJUWrFtEuDgYfcf5
+config_db_password: AQECAHgohc0dbuzR1L3lEdEkDC96PMYUEV9nITog
 ...
 ...
 ```
@@ -277,7 +277,7 @@ For example in the following configuration snippet, notice the following:
 # From group_vars/<env>/vars.yml
 ...
 ...
-config_db_password: AQECAHgohc0dbuzR1L3lEdEkDC96PMYUEV9nITogJU2vbocgQAAAAHYwdAYJKoZIhvcNAQcGoGcwZQIBADBgBgkqhkiG9w0BBwEwHgYJYIZIAWUDBAEuMBEEDHKUCiAJWXT2aWTwhgIBEIAzedFwZHu6M1i2qyKLotQuSgba5RRNT0uxW0oUXPJCUxN+vDfrQW+GuJUWrFtEuDgYfcf5
+config_db_password: AQECAHgohc0dbuzR1L3lEdEkDC96PMYUEV9nITog
 ...
 ...
 
@@ -316,6 +316,7 @@ The base image for the Intake API Docker image used by the `ApplicationTaskDefin
 
 For example, the `ApplicationTaskDefinition` resource includes the following environment variable configuration:
 
+```
 # From templates/stack.yml.j2
 ...
 ...
