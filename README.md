@@ -32,7 +32,7 @@ A CloudFormation stack file will be created in a dynamically create folder `buil
 
 > You can override the build folder by setting the variable `cf_build_folder` in your global or environment settings
 
-### Creating/Updated a Stack
+### Creating/Updating a Stack
 
 To deploy to an environment called `dev`:
 
@@ -60,7 +60,7 @@ dev ansible_connection=local
 
 [staging]
 staging ansible_connection=local
-``
+```
 
 You must also create a folder for the environment in the [`group_vars`](group_vars) folder and create a file called `group_vars/<env>/vars.yml`:
 
