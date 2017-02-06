@@ -208,6 +208,7 @@ Resources:
                 AUTOSCALING_GROUP: "ApplicationAutoscaling"
                 AWS_DEFAULT_REGION: { "Ref": "AWS::Region" }
                 ECS_CLUSTER: { "Ref": "ApplicationCluster" }
+                DOCKER_NETWORK_MODE: host
                 PROXY_URL:
                   Fn::ImportValue: DefaultProxyURL
               cwd: "/home/ec2-user/"
@@ -455,6 +456,7 @@ Resources:
                 AUTOSCALING_GROUP: "ElasticsearchAutoscaling"
                 AWS_DEFAULT_REGION: { "Ref": "AWS::Region" }
                 ECS_CLUSTER: { "Ref": "ElasticsearchCluster" }
+                DOCKER_NETWORK_MODE: host
                 PROXY_URL:
                   Fn::ImportValue: DefaultProxyURL
               cwd: "/home/ec2-user/"
