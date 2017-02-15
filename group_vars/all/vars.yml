@@ -32,3 +32,4 @@ cf_stack_inputs:
   DbName: "{{ config_db_name }}"
   DbUsername: "{{ config_db_username }}"
   DbPassword: "{{ config_db_password }}"
+  SecretKeyBaseCipher: "{{ config_application_secret_key_base }}"

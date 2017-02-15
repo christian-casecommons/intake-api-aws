@@ -10,6 +10,7 @@ config_application_image: 429614120872.dkr.ecr.us-west-2.amazonaws.com/cwds/inta
 config_application_tag: latest
 config_application_frontend_port: 443
 config_application_port: 3000
+config_application_secret_key_base: AQECAHgohc0dbuzR1L3lEdEkDC96PMYUEV9nITogJU2vbocgQAAAAIswgYgGCSqGSIb3DQEHBqB7MHkCAQAwdAYJKoZIhvcNAQcBMB4GCWCGSAFlAwQBLjARBAxmShgWJUrvG2uXdzkCARCAR3LpbhDDkVi6Rkz6mo+yD4QKeT71vT4HDA+yFdW4Ig9iJSd761OyGA1Q2kxfl1vnF+pbdYq3LiNptFEFttJsd/drMJ5I6vzo
 
 # Nginx settings
 config_nginx_image: 429614120872.dkr.ecr.us-west-2.amazonaws.com/cwds/nginx

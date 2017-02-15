@@ -82,6 +82,9 @@ Parameters:
     Type: String
     NoEcho: "True"
     Description: Encrypted Database Password
+  SecretKeyBaseCipher:
+    Type: String
+    Description: KMS Encrypted Secret Key Base
 
 Resources:
   ApplicationDnsRecord:
@@ -664,6 +667,8 @@ Resources:
             Value: { "Ref": "DbUsername" }
           - Name: KMS_PG_PASSWORD
             Value: { "Ref": "DbPassword" }
+          - Name: KMS_SECRET_KEY_BASE
+            Value: { "Ref": "SecretKeyBaseCipher" }
           - Name: ELASTICSEARCH_URL
             Value:
               Fn::Join: ["", [
