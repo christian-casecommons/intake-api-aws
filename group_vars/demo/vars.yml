@@ -1,0 +1,49 @@
+# STS settings
+sts_role_arn: arn:aws:iam::160775127577:role/admin
+
+# Application settings
+config_application_keyname: admin
+config_application_instance_type: t2.micro
+config_application_desired_count: 2
+config_application_ami: ami-4662e126
+config_application_image: 160775127577.dkr.ecr.us-west-2.amazonaws.com/casecommons/intake-api
+config_application_tag: latest
+config_application_frontend_port: 443
+config_application_port: 3000
+config_application_secret_key_base: AQECAHjbSbOZ8FLk7XffvdtrDewDyQKH9bOaMrY6jf+N3si+SQAAAIswgYgGCSqGSIb3DQEHBqB7MHkCAQAwdAYJKoZIhvcNAQcBMB4GCWCGSAFlAwQBLjARBAylerEZFMHMqvVgDiICARCAR36t/jpVODBIevAAeKEbHH+Tibj2/buhzmeoSiN+fm6T6CL1AE+yjRZ7B7FXp5S2RhYEwBrWLGD26r3NudZ9aj0IvLI8BwPS
+config_application_domain: demo.cloudhotspot.co
+
+# Nginx settings
+config_nginx_image: 160775127577.dkr.ecr.us-west-2.amazonaws.com/casecommons/nginx
+config_nginx_tag: latest
+
+# Load balancer settings
+config_lb_certificate_arn:
+  Fn::ImportValue: DemoCloudhotspotCoCertificateArn
+
+# Elasticsearch settings
+config_es_keyname: admin
+config_es_instance_type: t2.micro
+config_es_desired_count: 1
+config_es_ami: ami-4662e126
+config_es_image: 160775127577.dkr.ecr.us-west-2.amazonaws.com/casecommons/elasticsearch
+config_es_tag: latest
+config_es_frontend_port: 9200
+config_es_port: 9200
+
+# Database settings
+config_db_multi_az: false
+config_db_deletion_policy: Delete
+config_db_storage: 10
+config_db_instance_type: db.t2.micro
+config_db_name: casebook_api_production
+config_db_username: casebook
+config_db_password: AQECAHjbSbOZ8FLk7XffvdtrDewDyQKH9bOaMrY6jf+N3si+SQAAAHEwbwYJKoZIhvcNAQcGoGIwYAIBADBbBgkqhkiG9w0BBwEwHgYJYIZIAWUDBAEuMBEEDLRuXWaxRLSxR5//zAIBEIAuindRhw7U4ERU7xSWH/5QX8lJ1F2cZmjHCJh6EFTkD/5iU7BGXs/PVo1iy8czgw==
+
+# Log settings
+config_log_retention: 30
+config_log_deletion_policy: Delete
+
+# CloudFormation custom resource settings 
+config_cfn_lambda_kms_decrypt_version: "BIUpXhvw6w3f1LTctGVZxOpFD38lCHH1"
+config_cfn_lambda_ecs_tasks_version: "MiOiZi.9.AHyYQcFibBAvWYFD4xFJJ1c"

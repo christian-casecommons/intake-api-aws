@@ -1,2 +1,5 @@
 [dev]
 dev ansible_connection=local
+
+[demo]
+demo ansible_connection=local
