@@ -15,6 +15,7 @@ cf_stack_inputs:
   ApplicationKeyName: "{{ config_application_keyname }}"
   ApplicationDockerImage: "{{ config_application_image }}"
   ApplicationDockerImageTag: "{{ config_application_tag }}"
+  ApplicationDomain: "{{ config_application_domain }}"
   ElasticsearchAutoscalingDesiredCount: "{{ config_es_desired_count }}"
   ElasticsearchAMI: "{{ config_es_ami }}"
   ElasticsearchInstanceType: "{{ config_es_instance_type }}"
@@ -33,3 +34,5 @@ cf_stack_inputs:
   DbUsername: "{{ config_db_username }}"
   DbPassword: "{{ config_db_password }}"
   SecretKeyBaseCipher: "{{ config_application_secret_key_base }}"
+  LambdaCfnKmsDecryptVersion: "{{ config_cfn_lambda_kms_decrypt_version }}"
+  LambdaCfnEcsTasksVersion: "{{ config_cfn_lambda_ecs_tasks_version }}"

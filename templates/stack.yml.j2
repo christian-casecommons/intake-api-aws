@@ -28,6 +28,9 @@ Parameters:
   ApplicationPort:
     Type: Number
     Description: Application HTTP Port
+  ApplicationDomain:
+    Type: String
+    Description: Base public domain of the application URL
   ElasticsearchAMI:
     Type: String
     Description: Elasticsearch Amazon Machine Image ID
@@ -85,15 +88,22 @@ Parameters:
   SecretKeyBaseCipher:
     Type: String
     Description: KMS Encrypted Secret Key Base
+  LambdaCfnKmsDecryptVersion:
+    Type: String
+    Description: S3 Object Version of CloudFormation KMS Decrypt function
+  LambdaCfnEcsTasksVersion:
+    Type: String
+    Description: S3 Object Version of CloudFormation ECS Tasks function
 
 Resources:
   ApplicationDnsRecord:
     Type: "AWS::Route53::RecordSet"
     Properties:
       Name: 
-        Fn::Sub: "${Environment}-intake-api.ca.mycasebook.org"
+        Fn::Sub: "${Environment}-intake-api.${ApplicationDomain}"
       TTL: "300"
-      HostedZoneName: "ca.mycasebook.org."
+      HostedZoneName: 
+        Fn::Sub: "${ApplicationDomain}."
       Type: "CNAME"
       Comment: 
         Fn::Sub: "Intake API Application - ${Environment}"
@@ -121,8 +131,7 @@ Resources:
     Type: "AWS::ElasticLoadBalancingV2::Listener"
     Properties:
       Certificates:
-        - CertificateArn: 
-            Fn::ImportValue: CaMycasebookOrgCertArn
+        - CertificateArn: {{ config_lb_certificate_arn | to_json }}
       DefaultActions:
         - TargetGroupArn: { "Ref": "IntakeApiServiceTargetGroup" }
           Type: forward
@@ -655,6 +664,7 @@ Resources:
             awslogs-group: 
               Fn::Sub: ${AWS::StackName}/ecs/IntakeApiService/intake-api
             awslogs-region: { "Ref": "AWS::Region" }
+            awslogs-stream-prefix: docker
         Environment:
           - Name: RAILS_ENV
             Value: production
@@ -1074,7 +1084,7 @@ Resources:
         S3Bucket: 
           Fn::Sub: "${AWS::AccountId}-cfn-lambda"
         S3Key: "cfnKmsDecrypt.zip"
-        S3ObjectVersion: "86jHvErMu.CpTjqBvSlJabgr22pYGa9S"
+        S3ObjectVersion: { "Ref": "LambdaCfnKmsDecryptVersion" }
   KMSDecrypterRole:
     Type: "AWS::IAM::Role"
     Properties:
@@ -1137,7 +1147,7 @@ Resources:
         S3Bucket: 
           Fn::Sub: "${AWS::AccountId}-cfn-lambda"
         S3Key: "cfnEcsTasks.zip"
-        S3ObjectVersion: "gyujkgVKoH.NVeeuLYTi_7n_NUburwa4"
+        S3ObjectVersion: { "Ref": "LambdaCfnEcsTasksVersion" }
   EcsTaskRunnerRole:
     Type: "AWS::IAM::Role"
     Properties:

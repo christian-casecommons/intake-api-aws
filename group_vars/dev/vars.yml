@@ -11,10 +11,15 @@ config_application_tag: latest
 config_application_frontend_port: 443
 config_application_port: 3000
 config_application_secret_key_base: AQECAHgohc0dbuzR1L3lEdEkDC96PMYUEV9nITogJU2vbocgQAAAAIswgYgGCSqGSIb3DQEHBqB7MHkCAQAwdAYJKoZIhvcNAQcBMB4GCWCGSAFlAwQBLjARBAxmShgWJUrvG2uXdzkCARCAR3LpbhDDkVi6Rkz6mo+yD4QKeT71vT4HDA+yFdW4Ig9iJSd761OyGA1Q2kxfl1vnF+pbdYq3LiNptFEFttJsd/drMJ5I6vzo
+config_application_domain: ca.mycasebook.org
 
 # Nginx settings
 config_nginx_image: 429614120872.dkr.ecr.us-west-2.amazonaws.com/cwds/nginx
 config_nginx_tag: latest
+
+# Load balancer settings
+config_lb_certificate_arn:
+  Fn::ImportValue: CaMycasebookOrgCertArn
 
 # Elasticsearch settings
 config_es_keyname: admin-shared-key
@@ -38,3 +43,7 @@ config_db_password: AQECAHgohc0dbuzR1L3lEdEkDC96PMYUEV9nITogJU2vbocgQAAAAG4wbAYJ
 # Log settings
 config_log_retention: 30
 config_log_deletion_policy: Delete
+
+# CloudFormation custom resource settings 
+config_cfn_lambda_kms_decrypt_version: "86jHvErMu.CpTjqBvSlJabgr22pYGa9S"
+config_cfn_lambda_ecs_tasks_version: "gyujkgVKoH.NVeeuLYTi_7n_NUburwa4"
