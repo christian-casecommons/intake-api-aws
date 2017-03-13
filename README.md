@@ -340,3 +340,18 @@ Resources:
 ```
 
 At container startup, the entrypoint script with decrypt the value of `KMS_PG_PASSWORD` and export a new environment variable `PG_PASSWORD` with the plaintext value of the `DbPassword` input parameter ciphertext.
+
+## License
+
+Copyright (C) 2017.  Case Commons, Inc.
+
+This program is free software: you can redistribute it and/or modify it under
+the terms of the GNU Affero General Public License as published by the Free
+Software Foundation, either version 3 of the License, or (at your option) any
+later version.
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See the GNU Affero General Public License for more details.
+
+See www.gnu.org/licenses/agpl.html
