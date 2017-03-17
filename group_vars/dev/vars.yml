@@ -25,7 +25,7 @@ config_lb_certificate_arn:
 config_es_keyname: admin-shared-key
 config_es_instance_type: t2.micro
 config_es_desired_count: 1
-config_es_ami: ami-fa1da79a
+config_es_ami: ami-bcdc54dc
 config_es_image: 429614120872.dkr.ecr.us-west-2.amazonaws.com/cwds/elasticsearch
 config_es_tag: 2.4
 config_es_frontend_port: 9200
