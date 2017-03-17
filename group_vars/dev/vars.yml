@@ -5,7 +5,7 @@ sts_role_arn: arn:aws:iam::429614120872:role/remoteAdmin
 config_application_keyname: admin-shared-key
 config_application_instance_type: t2.micro
 config_application_desired_count: 2
-config_application_ami: ami-7a4ac51a
+config_application_ami: ami-bcdc54dc
 config_application_image: 429614120872.dkr.ecr.us-west-2.amazonaws.com/cwds/intake-api
 config_application_tag: latest
 config_application_frontend_port: 443
