@@ -3,15 +3,16 @@ AWSTemplateFormatVersion: "2010-09-09"
 Description: Intake API - {{ env }}
 
 Parameters:
-  ApplicationAMI:
+  ApplicationImageId:
     Type: String
     Description: Application Amazon Machine Image ID
   ApplicationInstanceType:
     Type: String
     Description: Application EC2 Instance Type
-  ApplicationAutoscalingDesiredCount:
+  ApplicationDesiredCount:
     Type: Number
     Description: Application AutoScaling Group Desired Count
+    Default: 1
   ApplicationDockerImage:
     Type: String
     Description: Docker Image for Application
@@ -28,16 +29,22 @@ Parameters:
   ApplicationPort:
     Type: Number
     Description: Application HTTP Port
+  ApplicationHostname:
+    Type: String
+    Description: Host portion of the application URL
   ApplicationDomain:
     Type: String
     Description: Base public domain of the application URL
-  ElasticsearchAMI:
+  ApplicationSecretKey:
+    Type: String
+    Description: KMS Encrypted Secret Key Base
+  ElasticsearchImageId:
     Type: String
     Description: Elasticsearch Amazon Machine Image ID
   ElasticsearchInstanceType:
     Type: String
     Description: Elasticsearch EC2 Instance Type
-  ElasticsearchAutoscalingDesiredCount:
+  ElasticsearchDesiredCount:
     Type: Number
     Description: Elasticsearch AutoScaling Group Desired Count
   ElasticsearchDockerImage:
@@ -56,9 +63,9 @@ Parameters:
   ElasticsearchPort:
     Type: Number
     Description: Elasticsearch Port
-  Environment:
+  ElasticsearchHostname:
     Type: String
-    Description: Stack Environment
+    Description: Host portion of the Elasticsearch URL
   LogRetention:
     Type: Number
     Description: Log retention in days
@@ -85,9 +92,11 @@ Parameters:
     Type: String
     NoEcho: "True"
     Description: Encrypted Database Password
-  SecretKeyBaseCipher:
+  DbMultiAz:
     Type: String
-    Description: KMS Encrypted Secret Key Base
+    Description: Enable/disable database multi AZ operation
+    Default: "False"
+    AllowedValues: ["True", "False"]
   LambdaCfnKmsDecryptVersion:
     Type: String
     Description: S3 Object Version of CloudFormation KMS Decrypt function
@@ -95,18 +104,32 @@ Parameters:
     Type: String
     Description: S3 Object Version of CloudFormation ECS Tasks function
 
+Conditions:
+  ApplicationSingleInstanceCondition:
+    Fn::Equals:
+      - Ref: ApplicationDesiredCount
+      - 1
+  ElasticsearchSingleInstanceCondition:
+    Fn::Equals:
+      - Ref: ElasticsearchDesiredCount
+      - 1
+  DbMultiAzCondition:
+    Fn::Equals:
+      - Ref: DbMultiAz
+      - "true"
+
 Resources:
   ApplicationDnsRecord:
     Type: "AWS::Route53::RecordSet"
     Properties:
       Name: 
-        Fn::Sub: "${Environment}-intake-api.${ApplicationDomain}"
+        Fn::Sub: "${ApplicationHostname}.${ApplicationDomain}"
       TTL: "300"
       HostedZoneName: 
         Fn::Sub: "${ApplicationDomain}."
       Type: "CNAME"
       Comment: 
-        Fn::Sub: "Intake API Application - ${Environment}"
+        Fn::Sub: "Intake API Application - ${AWS::StackName}"
       ResourceRecords: 
         - Fn::Sub: "${ApplicationLoadBalancer.DNSName}"
   ApplicationLoadBalancer:
@@ -126,7 +149,7 @@ Resources:
       Tags:
         - Key: "Name"
           Value:
-            Fn::Sub: ${AWS::StackName}-${Environment}-lb
+            Fn::Sub: ${AWS::StackName}-lb
   ApplicationLoadBalancerApplicationListener:
     Type: "AWS::ElasticLoadBalancingV2::Listener"
     Properties:
@@ -186,11 +209,11 @@ Resources:
       - MessagesLogGroup
     CreationPolicy:
       ResourceSignal:
-        Count: { "Ref": "ApplicationAutoscalingDesiredCount"}
+        Count: { "Ref": "ApplicationDesiredCount"}
         Timeout: "PT15M"
     UpdatePolicy:
       AutoScalingRollingUpdate:
-        MinInstancesInService: { "Ref": "ApplicationAutoscalingDesiredCount"}
+        MinInstancesInService: { "Ref": "ApplicationDesiredCount"}
         MinSuccessfulInstancesPercent: "100"
         WaitOnResourceSignals: "true"
         PauseTime: "PT15M"
@@ -201,7 +224,7 @@ Resources:
       LaunchConfigurationName: { "Ref" : "ApplicationAutoscalingLaunchConfiguration" }
       MinSize: "0"
       MaxSize: "4"
-      DesiredCapacity: { "Ref": "ApplicationAutoscalingDesiredCount"}
+      DesiredCapacity: { "Ref": "ApplicationDesiredCount"}
       Tags:
         - Key: Name
           Value:
@@ -229,7 +252,7 @@ Resources:
               content: 
                 Fn::Sub: "ECS_CLUSTER=${ApplicationCluster}\n"
     Properties:
-      ImageId: { "Ref": "ApplicationAMI" }
+      ImageId: { "Ref": "ApplicationImageId" }
       InstanceType: { "Ref": "ApplicationInstanceType" }
       IamInstanceProfile: { "Ref": "ApplicationAutoscalingInstanceProfile" }
       KeyName: { "Ref": "ApplicationKeyName" }
@@ -268,6 +291,11 @@ Resources:
           ToPort: 22
           CidrIp:
             Fn::ImportValue: "DefaultManagementSubnetBCidr"
+        - IpProtocol: "tcp"
+          FromPort: 22
+          ToPort: 22
+          CidrIp:
+            Fn::ImportValue: "DefaultVpcCidr"
       SecurityGroupEgress:
         - IpProtocol: "tcp"
           FromPort: 3128
@@ -354,7 +382,7 @@ Resources:
     Properties:
       Name:
         Fn::Join: ["", [
-          "Fn::Sub": "${Environment}-intake-api-es.",
+          "Fn::Sub": "${ElasticsearchHostname}.",
           "Fn::ImportValue": "DefaultVpcDomain"
         ] ]
       TTL: "300"
@@ -362,7 +390,7 @@ Resources:
         Fn::ImportValue: DefaultVpcZone
       Type: "CNAME"
       Comment: 
-        Fn::Sub: "Intake API Elasticsearch - ${Environment}"
+        Fn::Sub: "Intake API Elasticsearch - ${AWS::StackName}"
       ResourceRecords: 
         - Fn::Sub: "${ElasticsearchLoadBalancer.DNSName}"
   ElasticsearchLoadBalancer:
@@ -382,7 +410,7 @@ Resources:
       Tags:
         - Key: "Name"
           Value:
-            Fn::Sub: ${AWS::StackName}-${Environment}-elasticsearch-lb
+            Fn::Sub: ${AWS::StackName}-elasticsearch-lb
   ElasticsearchLoadBalancerListener:
     Type: "AWS::ElasticLoadBalancingV2::Listener"
     Properties:
@@ -434,11 +462,11 @@ Resources:
       - ElasticsearchMessagesLogGroup
     CreationPolicy:
       ResourceSignal:
-        Count: { "Ref": "ElasticsearchAutoscalingDesiredCount"}
+        Count: { "Ref": "ElasticsearchDesiredCount"}
         Timeout: "PT15M"
     UpdatePolicy:
       AutoScalingRollingUpdate:
-        MinInstancesInService: { "Ref": "ElasticsearchAutoscalingDesiredCount"}
+        MinInstancesInService: { "Ref": "ElasticsearchDesiredCount"}
         MinSuccessfulInstancesPercent: "100"
         WaitOnResourceSignals: "true"
         PauseTime: "PT15M"
@@ -449,7 +477,7 @@ Resources:
       LaunchConfigurationName: { "Ref" : "ElasticsearchAutoscalingLaunchConfiguration" }
       MinSize: "0"
       MaxSize: "4"
-      DesiredCapacity: { "Ref": "ElasticsearchAutoscalingDesiredCount"}
+      DesiredCapacity: { "Ref": "ElasticsearchDesiredCount"}
       Tags:
         - Key: Name
           Value:
@@ -477,7 +505,7 @@ Resources:
               content: 
                 Fn::Sub: "ECS_CLUSTER=${ElasticsearchCluster}\n"
     Properties:
-      ImageId: { "Ref": "ElasticsearchAMI" }
+      ImageId: { "Ref": "ElasticsearchImageId" }
       InstanceType: { "Ref": "ElasticsearchInstanceType" }
       IamInstanceProfile: { "Ref": "ElasticsearchAutoscalingInstanceProfile" }
       KeyName: { "Ref": "ElasticsearchKeyName" }
@@ -594,13 +622,12 @@ Resources:
       DBSubnetGroupName: { "Ref": "ApplicationDatabaseSubnetGroup" }
       VPCSecurityGroups:
         - { "Ref" : "ApplicationDatabaseSecurityGroup" }
-{% if config_db_multi_az %}
-      MultiAZ: "True"
-{% else %}
-      MultiAZ: "False"
-      AvailabilityZone:
-        Fn::Sub: "${AWS::Region}a"
-{% endif %}
+      MultiAZ: { "Ref": "DbMultiAz" }
+      AvailabilityZone: 
+        Fn::If:
+          - "DbMultiAzCondition"
+          - Ref: "AWS::NoValue"
+          - Fn::Sub: "${AWS::Region}a"
       Tags:
         - Key: "Name"
           Value: "{{ 'intake-api-' + env + '-ApplicationDatabase' }}"
@@ -678,12 +705,12 @@ Resources:
           - Name: KMS_PG_PASSWORD
             Value: { "Ref": "DbPassword" }
           - Name: KMS_SECRET_KEY_BASE
-            Value: { "Ref": "SecretKeyBaseCipher" }
+            Value: { "Ref": "ApplicationSecretKey" }
           - Name: ELASTICSEARCH_URL
             Value:
               Fn::Join: ["", [
                 "http://",
-                "Fn::Sub": "${Environment}-intake-api-es.",
+                "Fn::Sub": "${ElasticsearchHostname}.",
                 "Fn::ImportValue": "DefaultVpcDomain", ":",
                 "Ref": "ElasticsearchPort"
               ] ]
@@ -699,7 +726,7 @@ Resources:
             Value:
               Fn::Join: ["", [
                 "169.254.169.254,",
-                "Fn::Sub": "${Environment}-intake-api-es.",
+                "Fn::Sub": "${ElasticsearchHostname}.",
                 "Fn::ImportValue": "DefaultVpcDomain"
               ] ]
           - Name: CLEAR_PROXY
@@ -778,7 +805,7 @@ Resources:
             Value:
               Fn::Join: ["", [
                 "http://",
-                "Fn::Sub": "${Environment}-intake-api-es.",
+                "Fn::Sub": "${ElasticsearchHostname}.",
                 "Fn::ImportValue": "DefaultVpcDomain", ":",
                 "Ref": "ElasticsearchPort"
               ] ]
@@ -794,7 +821,7 @@ Resources:
             Value:
               Fn::Join: ["", [
                 "169.254.169.254,",
-                "Fn::Sub": "${Environment}-intake-api-es.",
+                "Fn::Sub": "${ElasticsearchHostname}.",
                 "Fn::ImportValue": "DefaultVpcDomain"
               ] ]
           - Name: CLEAR_PROXY
@@ -813,9 +840,13 @@ Resources:
     Properties:
       Cluster: { "Ref": "ApplicationCluster" }
       TaskDefinition: { "Ref": "ApplicationTaskDefinition" }
-      DesiredCount: { "Ref": "ApplicationAutoscalingDesiredCount"}
+      DesiredCount: { "Ref": "ApplicationDesiredCount"}
       DeploymentConfiguration:
-          MinimumHealthyPercent: 50
+          MinimumHealthyPercent:
+            Fn::If:
+              - "ApplicationSingleInstanceCondition"
+              - 0
+              - 50
           MaximumPercent: 200
       LoadBalancers:
         - ContainerName: nginx
@@ -871,9 +902,13 @@ Resources:
     Properties:
       Cluster: { "Ref": "ElasticsearchCluster" }
       TaskDefinition: { "Ref": "ElasticsearchTaskDefinition" }
-      DesiredCount: { "Ref": "ElasticsearchAutoscalingDesiredCount"}
+      DesiredCount: { "Ref": "ElasticsearchDesiredCount"}
       DeploymentConfiguration:
-          MinimumHealthyPercent: 0
+          MinimumHealthyPercent:
+            Fn::If:
+              - "ElasticsearchSingleInstanceCondition"
+              - 0
+              - 50
           MaximumPercent: 200
       LoadBalancers:
         - ContainerName: elasticsearch

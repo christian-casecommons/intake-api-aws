@@ -1,6 +1,6 @@
 - src: git@github.com:Casecommons/aws-cloudformation.git
   scm: git
-  version: 0.7.0
+  version: master
   name: aws-cloudformation
 - src: git@github.com:Casecommons/aws-sts.git
   scm: git

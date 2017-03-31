@@ -1,38 +1,40 @@
 # STS settings
 sts_role_arn: arn:aws:iam::429614120872:role/remoteAdmin
-
+  
 # Application settings
-config_application_keyname: admin-shared-key
+config_application_key_name: admin-shared-key
 config_application_instance_type: t2.micro
 config_application_desired_count: 2
-config_application_ami: ami-bcdc54dc
-config_application_image: 429614120872.dkr.ecr.us-west-2.amazonaws.com/cwds/intake-api
-config_application_tag: latest
-config_application_frontend_port: 443
+config_application_image_id: ami-2027b340
+config_application_docker_image: 429614120872.dkr.ecr.us-west-2.amazonaws.com/cwds/intake-api
+config_application_docker_image_tag: latest
+config_application_load_balancer_port: 443
 config_application_port: 3000
-config_application_secret_key_base: AQECAHgohc0dbuzR1L3lEdEkDC96PMYUEV9nITogJU2vbocgQAAAAIswgYgGCSqGSIb3DQEHBqB7MHkCAQAwdAYJKoZIhvcNAQcBMB4GCWCGSAFlAwQBLjARBAxmShgWJUrvG2uXdzkCARCAR3LpbhDDkVi6Rkz6mo+yD4QKeT71vT4HDA+yFdW4Ig9iJSd761OyGA1Q2kxfl1vnF+pbdYq3LiNptFEFttJsd/drMJ5I6vzo
+config_application_secret_key: AQECAHgohc0dbuzR1L3lEdEkDC96PMYUEV9nITogJU2vbocgQAAAAIswgYgGCSqGSIb3DQEHBqB7MHkCAQAwdAYJKoZIhvcNAQcBMB4GCWCGSAFlAwQBLjARBAxmShgWJUrvG2uXdzkCARCAR3LpbhDDkVi6Rkz6mo+yD4QKeT71vT4HDA+yFdW4Ig9iJSd761OyGA1Q2kxfl1vnF+pbdYq3LiNptFEFttJsd/drMJ5I6vzo
+config_application_hostname: dev-intake-api
 config_application_domain: ca.mycasebook.org
 
 # Nginx settings
-config_nginx_image: 429614120872.dkr.ecr.us-west-2.amazonaws.com/cwds/nginx
-config_nginx_tag: latest
+config_nginx_docker_image: 429614120872.dkr.ecr.us-west-2.amazonaws.com/cwds/nginx
+config_nginx_docker_tag: latest
 
 # Load balancer settings
 config_lb_certificate_arn:
   Fn::ImportValue: CaMycasebookOrgCertArn
 
 # Elasticsearch settings
-config_es_keyname: admin-shared-key
-config_es_instance_type: t2.micro
-config_es_desired_count: 1
-config_es_ami: ami-bcdc54dc
-config_es_image: 429614120872.dkr.ecr.us-west-2.amazonaws.com/cwds/elasticsearch
-config_es_tag: 2.4
-config_es_frontend_port: 9200
-config_es_port: 9200
+config_elasticsearch_key_name: admin-shared-key
+config_elasticsearch_instance_type: t2.micro
+config_elasticsearch_desired_count: 1
+config_elasticsearch_image_id: ami-2027b340
+config_elasticsearch_docker_image: 429614120872.dkr.ecr.us-west-2.amazonaws.com/cwds/elasticsearch
+config_elasticsearch_docker_image_tag: 2.4
+config_elasticsearch_load_balancer_port: 9200
+config_elasticsearch_port: 9200
+config_elasticsearch_hostname: dev-intake-api-es
 
 # Database settings
-config_db_multi_az: false
+config_db_multi_az: "False"
 config_db_deletion_policy: Delete
 config_db_storage: 10
 config_db_instance_type: db.t2.micro
@@ -45,5 +47,5 @@ config_log_retention: 30
 config_log_deletion_policy: Delete
 
 # CloudFormation custom resource settings 
-config_cfn_lambda_kms_decrypt_version: "86jHvErMu.CpTjqBvSlJabgr22pYGa9S"
-config_cfn_lambda_ecs_tasks_version: "gyujkgVKoH.NVeeuLYTi_7n_NUburwa4"
+config_lambda_cfn_kms_decrypt_version: "86jHvErMu.CpTjqBvSlJabgr22pYGa9S"
+config_lambda_cfn_ecs_tasks_version: "gyujkgVKoH.NVeeuLYTi_7n_NUburwa4"
