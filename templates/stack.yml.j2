@@ -755,6 +755,7 @@ Resources:
             awslogs-group: 
               Fn::Sub: ${AWS::StackName}/ecs/IntakeApiService/nginx
             awslogs-region: { "Ref": "AWS::Region" }
+            awslogs-stream-prefix: docker
         PortMappings:
         - ContainerPort: { "Ref": "ApplicationPort" }
           Protocol: tcp
@@ -789,6 +790,7 @@ Resources:
             awslogs-group: 
               Fn::Sub: ${AWS::StackName}/ecs/IntakeApiService/adhoc
             awslogs-region: { "Ref": "AWS::Region" }
+            awslogs-stream-prefix: docker
         Environment:
           - Name: RAILS_ENV
             Value: production
@@ -887,6 +889,7 @@ Resources:
             awslogs-group: 
               Fn::Sub: ${AWS::StackName}/ecs/ElasticsearchService/elasticsearch
             awslogs-region: { "Ref": "AWS::Region" }
+            awslogs-stream-prefix: docker
         PortMappings:
         - ContainerPort: { "Ref": "ElasticsearchPort" }
           Protocol: tcp
