@@ -5,7 +5,7 @@ sts_role_arn: arn:aws:iam::429614120872:role/remoteAdmin
 config_application_key_name: admin-shared-key
 config_application_instance_type: t2.micro
 config_application_desired_count: 2
-config_application_image_id: ami-2027b340
+config_application_image_id: ami-bb75e3db
 config_application_docker_image: 429614120872.dkr.ecr.us-west-2.amazonaws.com/cwds/intake-api
 config_application_docker_image_tag: latest
 config_application_load_balancer_port: 443
@@ -26,7 +26,7 @@ config_lb_certificate_arn:
 config_elasticsearch_key_name: admin-shared-key
 config_elasticsearch_instance_type: t2.micro
 config_elasticsearch_desired_count: 1
-config_elasticsearch_image_id: ami-2027b340
+config_elasticsearch_image_id: ami-bb75e3db
 config_elasticsearch_docker_image: 429614120872.dkr.ecr.us-west-2.amazonaws.com/cwds/elasticsearch
 config_elasticsearch_docker_image_tag: 2.4
 config_elasticsearch_load_balancer_port: 9200
