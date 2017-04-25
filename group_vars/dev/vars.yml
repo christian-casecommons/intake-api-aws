@@ -16,7 +16,7 @@ config_application_domain: ca.mycasebook.org
 
 # Nginx settings
 config_nginx_docker_image: 429614120872.dkr.ecr.us-west-2.amazonaws.com/cwds/nginx
-config_nginx_docker_tag: latest
+config_nginx_docker_image_tag: latest
 
 # Load balancer settings
 config_lb_certificate_arn:
