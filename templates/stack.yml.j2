@@ -1148,15 +1148,9 @@ Resources:
           - Sid: "ManageLambdaLogs"
             Effect: "Allow"
             Action:
-            - "logs:CreateLogGroup"
             - "logs:CreateLogStream"
-            - "logs:PutLogEvents"
-            - "logs:PutRetentionPolicy"
-            - "logs:PutSubscriptionFilter"
             - "logs:DescribeLogStreams"
-            - "logs:DeleteLogGroup"
-            - "logs:DeleteRetentionPolicy"
-            - "logs:DeleteSubscriptionFilter"
+            - "logs:PutLogEvents"
             Resource: 
               Fn::Sub: "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${AWS::StackName}-cfnKmsDecrypt:*:*"
   EcsTaskRunnerLogGroup:
@@ -1224,14 +1218,8 @@ Resources:
           - Sid: "ManageLambdaLogs"
             Effect: "Allow"
             Action:
-            - "logs:CreateLogGroup"
             - "logs:CreateLogStream"
-            - "logs:PutLogEvents"
-            - "logs:PutRetentionPolicy"
-            - "logs:PutSubscriptionFilter"
             - "logs:DescribeLogStreams"
-            - "logs:DeleteLogGroup"
-            - "logs:DeleteRetentionPolicy"
-            - "logs:DeleteSubscriptionFilter"
+            - "logs:PutLogEvents"
             Resource: 
               Fn::Sub: "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${AWS::StackName}-cfnEcsTasks:*:*"
