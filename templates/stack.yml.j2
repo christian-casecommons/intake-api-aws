@@ -26,6 +26,9 @@ Parameters:
   ApplicationLoadBalancerPort:
     Type: Number
     Description: Application Front End HTTP Port
+  ApplicationLoadBalancerCertificateArn:
+    Type: String
+    Description: Name of CloudFormation export with Application Load Balancer certificate ARN
   ApplicationPort:
     Type: Number
     Description: Application HTTP Port
@@ -154,7 +157,9 @@ Resources:
     Type: "AWS::ElasticLoadBalancingV2::Listener"
     Properties:
       Certificates:
-        - CertificateArn: {{ config_lb_certificate_arn | to_json }}
+        - CertificateArn:
+            Fn::ImportValue:
+              Ref: ApplicationLoadBalancerCertificateArn
       DefaultActions:
         - TargetGroupArn: { "Ref": "IntakeApiServiceTargetGroup" }
           Type: forward
