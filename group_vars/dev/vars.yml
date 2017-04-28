@@ -1,51 +1,57 @@
 # STS settings
-sts_role_arn: arn:aws:iam::429614120872:role/remoteAdmin
-  
+Sts.Role: arn:aws:iam::429614120872:role/remoteAdmin
+
+Stack.Name: "{{ 'intake-api-' + env }}"
+
 # Application settings
-config_application_key_name: admin-shared-key
-config_application_instance_type: t2.micro
-config_application_desired_count: 2
-config_application_image_id: ami-bb75e3db
-config_application_docker_image: 429614120872.dkr.ecr.us-west-2.amazonaws.com/cwds/intake-api
-config_application_docker_image_tag: latest
-config_application_load_balancer_port: 443
-config_application_port: 3000
-config_application_secret_key: AQECAHgohc0dbuzR1L3lEdEkDC96PMYUEV9nITogJU2vbocgQAAAAIswgYgGCSqGSIb3DQEHBqB7MHkCAQAwdAYJKoZIhvcNAQcBMB4GCWCGSAFlAwQBLjARBAxmShgWJUrvG2uXdzkCARCAR3LpbhDDkVi6Rkz6mo+yD4QKeT71vT4HDA+yFdW4Ig9iJSd761OyGA1Q2kxfl1vnF+pbdYq3LiNptFEFttJsd/drMJ5I6vzo
-config_application_hostname: dev-intake-api
-config_application_domain: ca.mycasebook.org
+Stack.Inputs.ApplicationKeyName: admin-shared-key
+Stack.Inputs.ApplicationInstanceType: t2.micro
+Stack.Inputs.ApplicationDesiredCount: 2
+Stack.Inputs.ApplicationImageId: ami-bb75e3db
+Stack.Inputs.ApplicationDockerImage: 429614120872.dkr.ecr.us-west-2.amazonaws.com/cwds/intake-api
+Stack.Inputs.ApplicationDockerImageTag: latest
+Stack.Inputs.ApplicationLoadBalancerPort: 443
+Stack.Inputs.ApplicationPort: 3000
+Stack.Inputs.ApplicationSecretKey: AQECAHipA5t7CpNKiZ5vP0gUjbCZImphz7KQJsH+JQoh9RzzxAAAAIswgYgGCSqGSIb3DQEHBqB7MHkCAQAwdAYJKoZIhvcNAQcBMB4GCWCGSAFlAwQBLjARBAxePoY7LdoHAADxJD0CARCAR8Wp4/E/3Y1KV6I4FAsDeGDGtEtaf1geDNdx7jMyCxKwNlN9S21ACCFj2/iFw+SzPzhw32eJ5XovYhfCx4bQGqikQZAjrpO2
+Stack.Inputs.ApplicationHostname: dev-intake-api
+Stack.Inputs.ApplicationDomain: ca.mycasebook.org
 
 # Nginx settings
-config_nginx_docker_image: 429614120872.dkr.ecr.us-west-2.amazonaws.com/cwds/nginx
-config_nginx_docker_image_tag: latest
+Stack.Inputs.NginxDockerImage: 429614120872.dkr.ecr.us-west-2.amazonaws.com/cwds/nginx
+Stack.Inputs.NginxDockerImageTag: latest
 
 # Load balancer settings
-config_lb_certificate_arn:
-  Fn::ImportValue: CaMycasebookOrgCertArn
+Stack.Inputs.ApplicationLoadBalancerCertificateArn: CaMycasebookOrgCertArn
 
 # Elasticsearch settings
-config_elasticsearch_key_name: admin-shared-key
-config_elasticsearch_instance_type: t2.micro
-config_elasticsearch_desired_count: 1
-config_elasticsearch_image_id: ami-bb75e3db
-config_elasticsearch_docker_image: 429614120872.dkr.ecr.us-west-2.amazonaws.com/cwds/elasticsearch
-config_elasticsearch_docker_image_tag: 2.4
-config_elasticsearch_load_balancer_port: 9200
-config_elasticsearch_port: 9200
-config_elasticsearch_hostname: dev-intake-api-es
+Stack.Inputs.ElasticsearchKeyName: admin-shared-key
+Stack.Inputs.ElasticsearchInstanceType: t2.micro
+Stack.Inputs.ElasticsearchDesiredCount: 1
+Stack.Inputs.ElasticsearchImageId: ami-bb75e3db
+Stack.Inputs.ElasticsearchDockerImage: 429614120872.dkr.ecr.us-west-2.amazonaws.com/cwds/elasticsearch
+Stack.Inputs.ElasticsearchDockerImageTag: latest
+Stack.Inputs.ElasticsearchLoadBalancerPort: 9200
+Stack.Inputs.ElasticsearchPort: 9200
+Stack.Inputs.ElasticsearchHostname: dev-intake-api-es
 
 # Database settings
-config_db_multi_az: "False"
-config_db_deletion_policy: Delete
-config_db_storage: 10
-config_db_instance_type: db.t2.micro
-config_db_name: casebook_api_production
-config_db_username: casebook
-config_db_password: AQECAHgohc0dbuzR1L3lEdEkDC96PMYUEV9nITogJU2vbocgQAAAAG4wbAYJKoZIhvcNAQcGoF8wXQIBADBYBgkqhkiG9w0BBwEwHgYJYIZIAWUDBAEuMBEEDJ0IlbZMA9NeCR+P4QIBEIArRwg3bizT0FgpH3WiznpohfgPBRRohoD1wSwAnCJbNZwG3XuICebZ5PojuQ==
+Stack.Inputs.DbMultiAz: false
+Stack.Inputs.DbStorage: 10
+Stack.Inputs.DbInstanceType: db.t2.micro
+Stack.Inputs.DbName: casebook_api_production
+Stack.Inputs.DbUsername: casebook
+Stack.Inputs.DbPassword: AQECAHgohc0dbuzR1L3lEdEkDC96PMYUEV9nITogJU2vbocgQAAAAG4wbAYJKoZIhvcNAQcGoF8wXQIBADBYBgkqhkiG9w0BBwEwHgYJYIZIAWUDBAEuMBEEDJ0IlbZMA9NeCR+P4QIBEIArRwg3bizT0FgpH3WiznpohfgPBRRohoD1wSwAnCJbNZwG3XuICebZ5PojuQ==
 
 # Log settings
-config_log_retention: 30
-config_log_deletion_policy: Delete
+Stack.Inputs.LogRetention: 30
 
-# CloudFormation custom resource settings 
-config_lambda_cfn_kms_decrypt_version: "86jHvErMu.CpTjqBvSlJabgr22pYGa9S"
-config_lambda_cfn_ecs_tasks_version: "gyujkgVKoH.NVeeuLYTi_7n_NUburwa4"
+# Add a global override to resources of the given type
+AWS::Logs::LogGroup:
+  DeletionPolicy: Delete
+
+AWS::RDS::DBInstance:
+  DeletionPolicy: Delete
+
+# CloudFormation custom resource settings
+Stack.Inputs.LambdaCfnKmsDecryptVersion: "86jHvErMu.CpTjqBvSlJabgr22pYGa9S"
+Stack.Inputs.LambdaCfnEcsTasksVersion: "gyujkgVKoH.NVeeuLYTi_7n_NUburwa4"
