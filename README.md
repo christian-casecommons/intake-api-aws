@@ -341,6 +341,14 @@ Resources:
 
 At container startup, the entrypoint script with decrypt the value of `KMS_PG_PASSWORD` and export a new environment variable `PG_PASSWORD` with the plaintext value of the `DbPassword` input parameter ciphertext.
 
+
+## Release Notes
+
+### Version 0.1.0
+
+- First Release
+
+
 ## License
 
 Copyright (C) 2017.  Case Commons, Inc.
