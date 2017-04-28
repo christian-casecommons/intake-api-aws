@@ -6,6 +6,6 @@
 
 - name: Stack Deployment
   hosts: "{{ env }}"
-  environment: "{{ sts_creds }}"
+  environment: "{{ Sts.Credentials }}"
   roles:
     - aws-cloudformation
