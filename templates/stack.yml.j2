@@ -610,7 +610,7 @@ Resources:
       Roles: [ { "Ref": "ElasticsearchAutoscalingRole" } ]
   ApplicationDatabase:
     Type: "AWS::RDS::DBInstance"
-    DeletionPolicy: "{{ config_db_deletion_policy }}"
+    DeletionPolicy: Delete
     Properties:
       AllocatedStorage: { "Ref": "DbStorage" }
       AutoMinorVersionUpgrade: "true"
@@ -999,98 +999,98 @@ Resources:
               - search:reindex
   DmesgLogGroup:
     Type: "AWS::Logs::LogGroup"
-    DeletionPolicy: "{{ config_log_deletion_policy }}"
+    DeletionPolicy: Delete
     Properties:
       LogGroupName: 
         Fn::Sub: ${AWS::StackName}/ec2/ApplicationAutoscaling/var/log/dmesg
       RetentionInDays: { "Ref": "LogRetention" }
   DockerLogGroup:
     Type: "AWS::Logs::LogGroup"
-    DeletionPolicy: "{{ config_log_deletion_policy }}"
+    DeletionPolicy: Delete
     Properties:
       LogGroupName:
         Fn::Sub: ${AWS::StackName}/ec2/ApplicationAutoscaling/var/log/docker
       RetentionInDays: { "Ref": "LogRetention" }
   EcsAgentLogGroup:
     Type: "AWS::Logs::LogGroup"
-    DeletionPolicy: "{{ config_log_deletion_policy }}"
+    DeletionPolicy: Delete
     Properties:
       LogGroupName: 
         Fn::Sub: ${AWS::StackName}/ec2/ApplicationAutoscaling/var/log/ecs/ecs-agent
       RetentionInDays: { "Ref": "LogRetention" }
   EcsInitLogGroup:
     Type: "AWS::Logs::LogGroup"
-    DeletionPolicy: "{{ config_log_deletion_policy }}"
+    DeletionPolicy: Delete
     Properties:
       LogGroupName:
         Fn::Sub: ${AWS::StackName}/ec2/ApplicationAutoscaling/var/log/ecs/ecs-init
       RetentionInDays: { "Ref": "LogRetention" }
   MessagesLogGroup:
     Type: "AWS::Logs::LogGroup"
-    DeletionPolicy: "{{ config_log_deletion_policy }}"
+    DeletionPolicy: Delete
     Properties:
       LogGroupName:
         Fn::Sub: ${AWS::StackName}/ec2/ApplicationAutoscaling/var/log/messages
       RetentionInDays: { "Ref": "LogRetention" }
   IntakeApiServiceLogGroup:
     Type: "AWS::Logs::LogGroup"
-    DeletionPolicy: "{{ config_log_deletion_policy }}"
+    DeletionPolicy: Delete
     Properties:
       LogGroupName:
         Fn::Sub: ${AWS::StackName}/ecs/IntakeApiService/intake-api
       RetentionInDays: { "Ref": "LogRetention" }
   IntakeApiNginxLogGroup:
     Type: "AWS::Logs::LogGroup"
-    DeletionPolicy: "{{ config_log_deletion_policy }}"
+    DeletionPolicy: Delete
     Properties:
       LogGroupName:
         Fn::Sub: ${AWS::StackName}/ecs/IntakeApiService/nginx
       RetentionInDays: { "Ref": "LogRetention" }
   IntakeApiAdhocLogGroup:
     Type: "AWS::Logs::LogGroup"
-    DeletionPolicy: "{{ config_log_deletion_policy }}"
+    DeletionPolicy: Delete
     Properties:
       LogGroupName:
         Fn::Sub: ${AWS::StackName}/ecs/IntakeApiService/adhoc
       RetentionInDays: { "Ref": "LogRetention" }
   ElasticsearchDmesgLogGroup:
     Type: "AWS::Logs::LogGroup"
-    DeletionPolicy: "{{ config_log_deletion_policy }}"
+    DeletionPolicy: Delete
     Properties:
       LogGroupName: 
         Fn::Sub: ${AWS::StackName}/ec2/ElasticsearchAutoscaling/var/log/dmesg
       RetentionInDays: { "Ref": "LogRetention" }
   ElasticsearchDockerLogGroup:
     Type: "AWS::Logs::LogGroup"
-    DeletionPolicy: "{{ config_log_deletion_policy }}"
+    DeletionPolicy: Delete
     Properties:
       LogGroupName:
         Fn::Sub: ${AWS::StackName}/ec2/ElasticsearchAutoscaling/var/log/docker
       RetentionInDays: { "Ref": "LogRetention" }
   ElasticsearchEcsAgentLogGroup:
     Type: "AWS::Logs::LogGroup"
-    DeletionPolicy: "{{ config_log_deletion_policy }}"
+    DeletionPolicy: Delete
     Properties:
       LogGroupName: 
         Fn::Sub: ${AWS::StackName}/ec2/ElasticsearchAutoscaling/var/log/ecs/ecs-agent
       RetentionInDays: { "Ref": "LogRetention" }
   ElasticsearchEcsInitLogGroup:
     Type: "AWS::Logs::LogGroup"
-    DeletionPolicy: "{{ config_log_deletion_policy }}"
+    DeletionPolicy: Delete
     Properties:
       LogGroupName:
         Fn::Sub: ${AWS::StackName}/ec2/ElasticsearchAutoscaling/var/log/ecs/ecs-init
       RetentionInDays: { "Ref": "LogRetention" }
   ElasticsearchMessagesLogGroup:
     Type: "AWS::Logs::LogGroup"
-    DeletionPolicy: "{{ config_log_deletion_policy }}"
+    DeletionPolicy: Delete
     Properties:
       LogGroupName:
         Fn::Sub: ${AWS::StackName}/ec2/ElasticsearchAutoscaling/var/log/messages
       RetentionInDays: { "Ref": "LogRetention" }
   ElasticsearchServiceLogGroup:
     Type: "AWS::Logs::LogGroup"
-    DeletionPolicy: "{{ config_log_deletion_policy }}"
+    DeletionPolicy: Delete
     Properties:
       LogGroupName:
         Fn::Sub: ${AWS::StackName}/ecs/ElasticsearchService/elasticsearch
@@ -1103,7 +1103,7 @@ Resources:
       Ciphertext: { "Ref": "DbPassword" }
   KMSDecrypterLogGroup:
     Type: "AWS::Logs::LogGroup"
-    DeletionPolicy: "{{ config_log_deletion_policy }}"
+    DeletionPolicy: Delete
     Properties:
       LogGroupName:
         Fn::Sub: /aws/lambda/${AWS::StackName}-cfnKmsDecrypt
@@ -1160,7 +1160,7 @@ Resources:
               Fn::Sub: "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${AWS::StackName}-cfnKmsDecrypt:*:*"
   EcsTaskRunnerLogGroup:
     Type: "AWS::Logs::LogGroup"
-    DeletionPolicy: "{{ config_log_deletion_policy }}"
+    DeletionPolicy: Delete
     Properties:
       LogGroupName:
         Fn::Sub: /aws/lambda/${AWS::StackName}-cfnEcsTasks
