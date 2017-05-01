@@ -1,7 +1,7 @@
 # STS settings
 Sts.Role: arn:aws:iam::429614120872:role/remoteAdmin
 
-Stack.Name: "{{ 'intake-api-' + env }}"
+Stack.Name: intake-api-dev
 
 # Application settings
 Stack.Inputs.ApplicationKeyName: admin-shared-key
@@ -29,7 +29,7 @@ Stack.Inputs.ElasticsearchInstanceType: t2.micro
 Stack.Inputs.ElasticsearchDesiredCount: 1
 Stack.Inputs.ElasticsearchImageId: ami-bb75e3db
 Stack.Inputs.ElasticsearchDockerImage: 429614120872.dkr.ecr.us-west-2.amazonaws.com/cwds/elasticsearch
-Stack.Inputs.ElasticsearchDockerImageTag: latest
+Stack.Inputs.ElasticsearchDockerImageTag: 2.4
 Stack.Inputs.ElasticsearchLoadBalancerPort: 9200
 Stack.Inputs.ElasticsearchPort: 9200
 Stack.Inputs.ElasticsearchHostname: dev-intake-api-es
