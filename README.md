@@ -344,6 +344,11 @@ At container startup, the entrypoint script with decrypt the value of `KMS_PG_PA
 
 ## Release Notes
 
+### Version 0.2.0
+
+- **NEW FEATURE** : Use stack overrides, a new syntax to override portions of the stack template
+- **NEW FEATURE** : Use dot notations syntax to specify STS configurations
+
 ### Version 0.1.0
 
 - First Release
