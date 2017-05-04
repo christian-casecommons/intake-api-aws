@@ -122,6 +122,27 @@ Conditions:
       - "true"
 
 Resources:
+  ApplicationCluster:
+    Type: Stack::Transform
+    Template: asg.yml.j2
+    Properties:
+      Name: ApplicationCluster
+      CloudwatchAlarms:
+        Ref: CloudwatchAlarms
+      DesiredCount:
+        Ref: ApplicationDesiredCount
+      ImageId:
+        Ref: ApplicationImageId
+      InstanceType:
+        Ref: ApplicationInstanceType
+      KeyName:
+        Ref: ApplicationKeyName
+      Subnets: Medium
+      ProxyEnabled: "True"
+      ProxyUrl:
+        Fn::ImportValue: DefaultProxyURL
+      VpcName: Default
+
   ApplicationDnsRecord:
     Type: "AWS::Route53::RecordSet"
     Properties:
@@ -194,7 +215,7 @@ Resources:
       IpProtocol: "tcp"
       FromPort: { "Ref": "ApplicationPort" }
       ToPort: { "Ref": "ApplicationPort" }
-      GroupId: { "Ref": "ApplicationAutoscalingSecurityGroup" }
+      GroupId: { "Ref": "ApplicationClusterSecurityGroup" }
       SourceSecurityGroupId: { "Ref": "ApplicationLoadBalancerSecurityGroup" }
   ApplicationLoadBalancerToApplicationEgress:
     Type: "AWS::EC2::SecurityGroupEgress"
@@ -203,121 +224,7 @@ Resources:
       FromPort: { "Ref": "ApplicationPort" }
       ToPort: { "Ref": "ApplicationPort" }
       GroupId: { "Ref": "ApplicationLoadBalancerSecurityGroup" }
-      DestinationSecurityGroupId: { "Ref": "ApplicationAutoscalingSecurityGroup" }
-  ApplicationAutoscaling:
-    Type: "AWS::AutoScaling::AutoScalingGroup"
-    DependsOn:
-      - DmesgLogGroup
-      - DockerLogGroup
-      - EcsAgentLogGroup
-      - EcsInitLogGroup
-      - MessagesLogGroup
-    CreationPolicy:
-      ResourceSignal:
-        Count: { "Ref": "ApplicationDesiredCount"}
-        Timeout: "PT15M"
-    UpdatePolicy:
-      AutoScalingRollingUpdate:
-        MinInstancesInService: { "Ref": "ApplicationDesiredCount"}
-        MinSuccessfulInstancesPercent: "100"
-        WaitOnResourceSignals: "true"
-        PauseTime: "PT15M"
-    Properties:
-      VPCZoneIdentifier:
-        - Fn::ImportValue: "DefaultMediumSubnetA"
-        - Fn::ImportValue: "DefaultMediumSubnetB"
-      LaunchConfigurationName: { "Ref" : "ApplicationAutoscalingLaunchConfiguration" }
-      MinSize: "0"
-      MaxSize: "4"
-      DesiredCapacity: { "Ref": "ApplicationDesiredCount"}
-      Tags:
-        - Key: Name
-          Value:
-            Fn::Sub: ${AWS::StackName}-instance
-          PropagateAtLaunch: "true"
-  ApplicationAutoscalingLaunchConfiguration:
-    Type: "AWS::AutoScaling::LaunchConfiguration"
-    Metadata:
-      AWS::CloudFormation::Init:
-        config:
-          commands:
-            10_first_run:
-              command: "sh firstrun.sh"
-              env:
-                STACK_NAME: { "Ref": "AWS::StackName" }
-                AUTOSCALING_GROUP: "ApplicationAutoscaling"
-                AWS_DEFAULT_REGION: { "Ref": "AWS::Region" }
-                ECS_CLUSTER: { "Ref": "ApplicationCluster" }
-                DOCKER_NETWORK_MODE: host
-                PROXY_URL:
-                  Fn::ImportValue: DefaultProxyURL
-              cwd: "/home/ec2-user/"
-          files:
-            /etc/ecs/ecs.config:
-              content: 
-                Fn::Sub: "ECS_CLUSTER=${ApplicationCluster}\n"
-    Properties:
-      ImageId: { "Ref": "ApplicationImageId" }
-      InstanceType: { "Ref": "ApplicationInstanceType" }
-      IamInstanceProfile: { "Ref": "ApplicationAutoscalingInstanceProfile" }
-      KeyName: { "Ref": "ApplicationKeyName" }
-      SecurityGroups:
-        - Ref: "ApplicationAutoscalingSecurityGroup"
-      UserData: 
-        Fn::Base64:
-          Fn::Join: ["\n", [
-            "#!/bin/bash",
-            "set -e",
-            "Fn::Join": ["", [
-              "Fn::Sub": "/opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource ApplicationAutoscalingLaunchConfiguration --region ${AWS::Region}",
-              "    --http-proxy ", "Fn::ImportValue": "DefaultProxyURL", 
-              "    --https-proxy ", "Fn::ImportValue": "DefaultProxyURL"
-            ] ],
-            "Fn::Join": ["", [
-              "Fn::Sub": "/opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource ApplicationAutoscaling --region ${AWS::Region}",
-              "    --http-proxy ", "Fn::ImportValue": "DefaultProxyURL", 
-              "    --https-proxy ", "Fn::ImportValue": "DefaultProxyURL"
-            ] ]
-          ] ]
-  ApplicationAutoscalingSecurityGroup:
-    Type: "AWS::EC2::SecurityGroup"
-    Properties:
-      VpcId:
-        Fn::ImportValue: "DefaultVpcId"
-      GroupDescription: "Intake API Security Group"
-      SecurityGroupIngress:
-        - IpProtocol: "tcp"
-          FromPort: 22
-          ToPort: 22
-          CidrIp:
-            Fn::ImportValue: "DefaultManagementSubnetACidr"
-        - IpProtocol: "tcp"
-          FromPort: 22
-          ToPort: 22
-          CidrIp:
-            Fn::ImportValue: "DefaultManagementSubnetBCidr"
-        - IpProtocol: "tcp"
-          FromPort: 22
-          ToPort: 22
-          CidrIp:
-            Fn::ImportValue: "DefaultVpcCidr"
-      SecurityGroupEgress:
-        - IpProtocol: "tcp"
-          FromPort: 3128
-          ToPort: 3128
-          DestinationSecurityGroupId:
-            Fn::ImportValue: DefaultProxySecurityGroup
-        - IpProtocol: "udp"
-          FromPort: 53
-          ToPort: 53
-          CidrIp:
-            Fn::Join: ["", [
-              "Fn::ImportValue": "DefaultVpcDnsServer", "/32"
-            ] ]
-        - IpProtocol: "udp"
-          FromPort: 123
-          ToPort: 123
-          CidrIp: 0.0.0.0/0
+      DestinationSecurityGroupId: { "Ref": "ApplicationClusterSecurityGroup" }
   ApplicationToElasticsearchLoadBalancerIngress:
     Type: "AWS::EC2::SecurityGroupIngress"
     Properties:
@@ -325,63 +232,15 @@ Resources:
       FromPort: { "Ref": "ElasticsearchLoadBalancerPort"}
       ToPort: { "Ref": "ElasticsearchLoadBalancerPort"}
       GroupId: { "Ref": "ElasticsearchLoadBalancerSecurityGroup" }
-      SourceSecurityGroupId: { "Ref": "ApplicationAutoscalingSecurityGroup" }
+      SourceSecurityGroupId: { "Ref": "ApplicationClusterSecurityGroup" }
   ApplicationToElasticsearchLoadBalancerEgress:
     Type: "AWS::EC2::SecurityGroupEgress"
     Properties:
       IpProtocol: "tcp"
       FromPort: { "Ref": "ElasticsearchLoadBalancerPort"}
       ToPort: { "Ref": "ElasticsearchLoadBalancerPort"}
-      GroupId: { "Ref": "ApplicationAutoscalingSecurityGroup" }
+      GroupId: { "Ref": "ApplicationClusterSecurityGroup" }
       DestinationSecurityGroupId: { "Ref": "ElasticsearchLoadBalancerSecurityGroup" }
-  ApplicationAutoscalingRole:
-    Type: "AWS::IAM::Role"
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: "Allow"
-            Principal:
-              Service: [ "ec2.amazonaws.com" ]
-            Action: [ "sts:AssumeRole" ]
-      Path: "/"
-      ManagedPolicyArns: []
-      Policies:
-        - {{ cf_cloudwatch_ec2_logs_policy | to_json }}
-        - PolicyName: "EC2ContainerInstancePolicy"
-          PolicyDocument:
-            Statement:
-              - Effect: "Allow"
-                Action:
-                  - "ecs:RegisterContainerInstance"
-                  - "ecs:DeregisterContainerInstance"
-                Resource: 
-                  Fn::Sub: "arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:cluster/${ApplicationCluster}"
-              - Effect: "Allow"
-                Action:
-                  - "ecs:DiscoverPollEndpoint"
-                  - "ecs:Submit*"
-                  - "ecs:Poll"
-                  - "ecs:StartTelemetrySession"
-                Resource: "*"
-              - Effect: "Allow"
-                Action: 
-                  - "ecr:BatchCheckLayerAvailability"
-                  - "ecr:BatchGetImage"
-                  - "ecr:GetDownloadUrlForLayer"
-                  - "ecr:GetAuthorizationToken"
-                Resource: "*"
-              - Effect: "Allow"
-                Action:
-                - "kms:Decrypt"
-                - "kms:DescribeKey"
-                Resource:
-                  Fn::ImportValue: "CfnMasterKeyArn"
-  ApplicationAutoscalingInstanceProfile:
-    Type: "AWS::IAM::InstanceProfile"
-    Properties:
-      Path: "/"
-      Roles: [ { "Ref": "ApplicationAutoscalingRole" } ]
   ElasticsearchDnsRecord:
     Type: "AWS::Route53::RecordSet"
     Properties:
@@ -660,24 +519,22 @@ Resources:
       Tags:
         - Key: "Name"
           Value: "{{ 'intake-api-' + env + '-ApplicationDatabase-sg' }}"
-  ApplicationAutoscalingToApplicationDatabaseIngressTcp5432:
+  ApplicationClusterToApplicationDatabaseIngressTcp5432:
     Type: "AWS::EC2::SecurityGroupIngress"
     Properties:
       IpProtocol: "tcp"
       FromPort: "5432"
       ToPort: "5432"
       GroupId: { "Ref": "ApplicationDatabaseSecurityGroup" }
-      SourceSecurityGroupId: { "Ref": "ApplicationAutoscalingSecurityGroup" }
-  ApplicationAutoscalingToApplicationDatabaseEgressTcp5432:
+      SourceSecurityGroupId: { "Ref": "ApplicationClusterSecurityGroup" }
+  ApplicationClusterToApplicationDatabaseEgressTcp5432:
     Type: "AWS::EC2::SecurityGroupEgress"
     Properties:
       IpProtocol: "tcp"
       FromPort: "5432"
       ToPort: "5432"
-      GroupId: { "Ref": "ApplicationAutoscalingSecurityGroup" }
+      GroupId: { "Ref": "ApplicationClusterSecurityGroup" }
       DestinationSecurityGroupId: { "Ref": "ApplicationDatabaseSecurityGroup" }
-  ApplicationCluster:
-    Type: "AWS::ECS::Cluster"
   ApplicationTaskDefinition:
     Type: "AWS::ECS::TaskDefinition"
     Properties:
@@ -837,7 +694,7 @@ Resources:
     Type: "AWS::ECS::Service"
     DependsOn:
       - ApplicationLoadBalancer
-      - ApplicationAutoscaling
+      - ApplicationClusterAutoscalingGroup
       - IntakeApiServiceLogGroup
       - IntakeApiNginxLogGroup
       - DbCreateTask
@@ -845,7 +702,7 @@ Resources:
       - SearchMigrateTask
       - SearchReindexTask
     Properties:
-      Cluster: { "Ref": "ApplicationCluster" }
+      Cluster: { "Ref": "ApplicationClusterEcsCluster" }
       TaskDefinition: { "Ref": "ApplicationTaskDefinition" }
       DesiredCount: { "Ref": "ApplicationDesiredCount"}
       DeploymentConfiguration:
@@ -926,13 +783,15 @@ Resources:
   DbCreateTask:
     Type: "Custom::ECSTask"
     DependsOn:
-      - ApplicationAutoscaling
+      - ApplicationClusterAutoscalingGroup
       - ApplicationDatabase
     Properties:
       ServiceToken:
         Fn::Sub: ${EcsTaskRunner.Arn}
-      Cluster: { "Ref": "ApplicationCluster" }
-      TaskDefinition: { "Ref": "AdhocTaskDefinition" }
+      Cluster:
+        Ref: ApplicationClusterEcsCluster
+      TaskDefinition:
+        Ref: AdhocTaskDefinition
       Count: 1
       Overrides:
         containerOverrides:
@@ -949,8 +808,10 @@ Resources:
     Properties:
       ServiceToken:
         Fn::Sub: ${EcsTaskRunner.Arn}
-      Cluster: { "Ref": "ApplicationCluster" }
-      TaskDefinition: { "Ref": "AdhocTaskDefinition" }
+      Cluster:
+        Ref: ApplicationClusterEcsCluster
+      TaskDefinition:
+        Ref: AdhocTaskDefinition
       Count: 1
       Overrides:
         containerOverrides:
@@ -968,7 +829,8 @@ Resources:
     Properties:
       ServiceToken:
         Fn::Sub: ${EcsTaskRunner.Arn}
-      Cluster: { "Ref": "ApplicationCluster" }
+      Cluster:
+        Ref: ApplicationClusterEcsCluster
       TaskDefinition: { "Ref": "AdhocTaskDefinition" }
       Count: 1
       Overrides:
@@ -980,14 +842,16 @@ Resources:
               - rake
               - search:migrate
   SearchReindexTask:
-    Type: "Custom::ECSTask"
+    Type: Custom::ECSTask
     DependsOn:
       - SearchMigrateTask
     Properties:
       ServiceToken:
         Fn::Sub: ${EcsTaskRunner.Arn}
-      Cluster: { "Ref": "ApplicationCluster" }
-      TaskDefinition: { "Ref": "AdhocTaskDefinition" }
+      Cluster:
+        Ref: ApplicationClusterEcsCluster
+      TaskDefinition:
+        Ref: AdhocTaskDefinition
       Count: 1
       Overrides:
         containerOverrides:
@@ -1002,35 +866,35 @@ Resources:
     DeletionPolicy: Delete
     Properties:
       LogGroupName: 
-        Fn::Sub: ${AWS::StackName}/ec2/ApplicationAutoscaling/var/log/dmesg
+        Fn::Sub: ${AWS::StackName}/ec2/ApplicationCluster/var/log/dmesg
       RetentionInDays: { "Ref": "LogRetention" }
   DockerLogGroup:
     Type: "AWS::Logs::LogGroup"
     DeletionPolicy: Delete
     Properties:
       LogGroupName:
-        Fn::Sub: ${AWS::StackName}/ec2/ApplicationAutoscaling/var/log/docker
+        Fn::Sub: ${AWS::StackName}/ec2/ApplicationCluster/var/log/docker
       RetentionInDays: { "Ref": "LogRetention" }
   EcsAgentLogGroup:
     Type: "AWS::Logs::LogGroup"
     DeletionPolicy: Delete
     Properties:
       LogGroupName: 
-        Fn::Sub: ${AWS::StackName}/ec2/ApplicationAutoscaling/var/log/ecs/ecs-agent
+        Fn::Sub: ${AWS::StackName}/ec2/ApplicationCluster/var/log/ecs/ecs-agent
       RetentionInDays: { "Ref": "LogRetention" }
   EcsInitLogGroup:
     Type: "AWS::Logs::LogGroup"
     DeletionPolicy: Delete
     Properties:
       LogGroupName:
-        Fn::Sub: ${AWS::StackName}/ec2/ApplicationAutoscaling/var/log/ecs/ecs-init
+        Fn::Sub: ${AWS::StackName}/ec2/ApplicationCluster/var/log/ecs/ecs-init
       RetentionInDays: { "Ref": "LogRetention" }
   MessagesLogGroup:
     Type: "AWS::Logs::LogGroup"
     DeletionPolicy: Delete
     Properties:
       LogGroupName:
-        Fn::Sub: ${AWS::StackName}/ec2/ApplicationAutoscaling/var/log/messages
+        Fn::Sub: ${AWS::StackName}/ec2/ApplicationCluster/var/log/messages
       RetentionInDays: { "Ref": "LogRetention" }
   IntakeApiServiceLogGroup:
     Type: "AWS::Logs::LogGroup"
@@ -1219,7 +1083,7 @@ Resources:
             Condition:
               ArnEquals:
                 ecs:cluster: 
-                  Fn::Sub: "arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:cluster/${ApplicationCluster}"
+                  Fn::Sub: "arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:cluster/${ApplicationClusterEcsCluster}"
           - Sid: "ManageLambdaLogs"
             Effect: "Allow"
             Action:
