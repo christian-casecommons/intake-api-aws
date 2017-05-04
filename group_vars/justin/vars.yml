@@ -1,0 +1,57 @@
+# STS settings
+Sts.Role: arn:aws:iam::429614120872:role/remoteAdmin
+
+Stack.Name: intake-api-justin
+
+# Application settings
+Stack.Inputs.ApplicationKeyName: admin-shared-key
+Stack.Inputs.ApplicationInstanceType: t2.micro
+Stack.Inputs.ApplicationDesiredCount: 2
+Stack.Inputs.ApplicationImageId: ami-bb75e3db
+Stack.Inputs.ApplicationDockerImage: 429614120872.dkr.ecr.us-west-2.amazonaws.com/cwds/intake-api
+Stack.Inputs.ApplicationDockerImageTag: latest
+Stack.Inputs.ApplicationLoadBalancerPort: 443
+Stack.Inputs.ApplicationPort: 3000
+Stack.Inputs.ApplicationSecretKey: AQECAHgohc0dbuzR1L3lEdEkDC96PMYUEV9nITogJU2vbocgQAAAAIswgYgGCSqGSIb3DQEHBqB7MHkCAQAwdAYJKoZIhvcNAQcBMB4GCWCGSAFlAwQBLjARBAxmShgWJUrvG2uXdzkCARCAR3LpbhDDkVi6Rkz6mo+yD4QKeT71vT4HDA+yFdW4Ig9iJSd761OyGA1Q2kxfl1vnF+pbdYq3LiNptFEFttJsd/drMJ5I6vzo
+Stack.Inputs.ApplicationHostname: justin-intake-api
+Stack.Inputs.ApplicationDomain: ca.mycasebook.org
+
+# Nginx settings
+Stack.Inputs.NginxDockerImage: 429614120872.dkr.ecr.us-west-2.amazonaws.com/cwds/nginx
+Stack.Inputs.NginxDockerImageTag: latest
+
+# Load balancer settings
+Stack.Inputs.ApplicationLoadBalancerCertificateArn: CaMycasebookOrgCertArn
+
+# Elasticsearch settings
+Stack.Inputs.ElasticsearchKeyName: admin-shared-key
+Stack.Inputs.ElasticsearchInstanceType: t2.micro
+Stack.Inputs.ElasticsearchDesiredCount: 1
+Stack.Inputs.ElasticsearchImageId: ami-bb75e3db
+Stack.Inputs.ElasticsearchDockerImage: 429614120872.dkr.ecr.us-west-2.amazonaws.com/cwds/elasticsearch
+Stack.Inputs.ElasticsearchDockerImageTag: 2.4
+Stack.Inputs.ElasticsearchLoadBalancerPort: 9200
+Stack.Inputs.ElasticsearchPort: 9200
+Stack.Inputs.ElasticsearchHostname: justin-intake-api-es
+
+# Database settings
+Stack.Inputs.DbMultiAz: false
+Stack.Inputs.DbStorage: 10
+Stack.Inputs.DbInstanceType: db.t2.micro
+Stack.Inputs.DbName: casebook_api_production
+Stack.Inputs.DbUsername: casebook
+Stack.Inputs.DbPassword: AQECAHgohc0dbuzR1L3lEdEkDC96PMYUEV9nITogJU2vbocgQAAAAG4wbAYJKoZIhvcNAQcGoF8wXQIBADBYBgkqhkiG9w0BBwEwHgYJYIZIAWUDBAEuMBEEDJ0IlbZMA9NeCR+P4QIBEIArRwg3bizT0FgpH3WiznpohfgPBRRohoD1wSwAnCJbNZwG3XuICebZ5PojuQ==
+
+# Log settings
+Stack.Inputs.LogRetention: 30
+
+# Add a global override to resources of the given type
+AWS::Logs::LogGroup:
+  DeletionPolicy: Delete
+
+AWS::RDS::DBInstance:
+  DeletionPolicy: Delete
+
+# CloudFormation custom resource settings
+Stack.Inputs.LambdaCfnKmsDecryptVersion: "86jHvErMu.CpTjqBvSlJabgr22pYGa9S"
+Stack.Inputs.LambdaCfnEcsTasksVersion: "gyujkgVKoH.NVeeuLYTi_7n_NUburwa4"
