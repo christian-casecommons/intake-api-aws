@@ -119,6 +119,11 @@ Conditions:
     Fn::Equals:
       - Ref: "BlockDeviceStorage"
       - 0
+  CloudwatchAlarmsTopicExists:
+    Fn::Not:
+      - Fn::Equals:
+        - Ref: CloudwatchAlarms
+        - ""
   EcsTaskRunnerLatest:
     Fn::Equals:
     - Ref: EcsTaskRunnerVersion
@@ -457,12 +462,21 @@ Resources:
       EvaluationPeriods: 1
       Threshold: 30
       ComparisonOperator: LessThanThreshold
-      # AlarmActions:
-      #   - Ref: CloudwatchAlarms
-      # OKActions:
-      #   - Ref: CloudwatchAlarms
-      # InsufficientDataActions:
-      #   - Ref: CloudwatchAlarms
+      AlarmActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      OKActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      InsufficientDataActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
       Dimensions:
         - Name: Name
           Value:
@@ -481,12 +495,21 @@ Resources:
       EvaluationPeriods: 1
       Threshold: 70
       ComparisonOperator: GreaterThanThreshold
-      # AlarmActions:
-      #   - Ref: CloudwatchAlarms
-      # OKActions:
-      #   - Ref: CloudwatchAlarms
-      # InsufficientDataActions:
-      #   - Ref: CloudwatchAlarms
+      AlarmActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      OKActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      InsufficientDataActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
       Dimensions:
         - Name: Name
           Value:
@@ -504,12 +527,21 @@ Resources:
       EvaluationPeriods: 2
       Threshold: 0
       ComparisonOperator: GreaterThanThreshold
-      # AlarmActions:
-      #   - Ref: CloudwatchAlarms
-      # OKActions:
-      #   - Ref: CloudwatchAlarms
-      # InsufficientDataActions:
-      #   - Ref: CloudwatchAlarms
+      AlarmActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      OKActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      InsufficientDataActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
       Dimensions:
         - Name: Name
           Value:
