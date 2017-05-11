@@ -306,7 +306,7 @@ Resources:
       IpProtocol: "tcp"
       FromPort: { "Ref": "ElasticsearchPort" }
       ToPort: { "Ref": "ElasticsearchPort" }
-      GroupId: { "Ref": "ElasticsearchAutoscalingSecurityGroup" }
+      GroupId: { "Ref": "ElasticsearchClusterSecurityGroup" }
       SourceSecurityGroupId: { "Ref": "ElasticsearchLoadBalancerSecurityGroup" }
   ElasticsearchLoadBalancerToElasticsearchEgress:
     Type: "AWS::EC2::SecurityGroupEgress"
@@ -315,158 +315,29 @@ Resources:
       FromPort: { "Ref": "ElasticsearchPort" }
       ToPort: { "Ref": "ElasticsearchPort" }
       GroupId: { "Ref": "ElasticsearchLoadBalancerSecurityGroup" }
-      DestinationSecurityGroupId: { "Ref": "ElasticsearchAutoscalingSecurityGroup" }
-  ElasticsearchAutoscaling:
-    Type: "AWS::AutoScaling::AutoScalingGroup"
-    DependsOn:
-      - ElasticsearchDmesgLogGroup
-      - ElasticsearchDockerLogGroup
-      - ElasticsearchEcsAgentLogGroup
-      - ElasticsearchEcsInitLogGroup
-      - ElasticsearchMessagesLogGroup
-    CreationPolicy:
-      ResourceSignal:
-        Count: { "Ref": "ElasticsearchDesiredCount"}
-        Timeout: "PT15M"
-    UpdatePolicy:
-      AutoScalingRollingUpdate:
-        MinInstancesInService: { "Ref": "ElasticsearchDesiredCount"}
-        MinSuccessfulInstancesPercent: "100"
-        WaitOnResourceSignals: "true"
-        PauseTime: "PT15M"
+      DestinationSecurityGroupId: { "Ref": "ElasticsearchClusterSecurityGroup" }
+  
+  ElasticsearchCluster:
+    Type: Stack::Transform
+    Template: asg.yml.j2
     Properties:
-      VPCZoneIdentifier:
-        - Fn::ImportValue: "DefaultHighSubnetA"
-        - Fn::ImportValue: "DefaultHighSubnetB"
-      LaunchConfigurationName: { "Ref" : "ElasticsearchAutoscalingLaunchConfiguration" }
-      MinSize: "0"
-      MaxSize: "4"
-      DesiredCapacity: { "Ref": "ElasticsearchDesiredCount"}
-      Tags:
-        - Key: Name
-          Value:
-            Fn::Sub: ${AWS::StackName}-ElasticsearchAutoscaling-instance
-          PropagateAtLaunch: "true"
-  ElasticsearchAutoscalingLaunchConfiguration:
-    Type: "AWS::AutoScaling::LaunchConfiguration"
-    Metadata:
-      AWS::CloudFormation::Init:
-        config:
-          commands:
-            10_first_run:
-              command: "sh firstrun.sh"
-              env:
-                STACK_NAME: { "Ref": "AWS::StackName" }
-                AUTOSCALING_GROUP: "ElasticsearchAutoscaling"
-                AWS_DEFAULT_REGION: { "Ref": "AWS::Region" }
-                ECS_CLUSTER: { "Ref": "ElasticsearchCluster" }
-                DOCKER_NETWORK_MODE: host
-                PROXY_URL:
-                  Fn::ImportValue: DefaultProxyURL
-              cwd: "/home/ec2-user/"
-          files:
-            /etc/ecs/ecs.config:
-              content: 
-                Fn::Sub: "ECS_CLUSTER=${ElasticsearchCluster}\n"
-    Properties:
-      ImageId: { "Ref": "ElasticsearchImageId" }
-      InstanceType: { "Ref": "ElasticsearchInstanceType" }
-      IamInstanceProfile: { "Ref": "ElasticsearchAutoscalingInstanceProfile" }
-      KeyName: { "Ref": "ElasticsearchKeyName" }
-      SecurityGroups:
-        - Ref: "ElasticsearchAutoscalingSecurityGroup"
-      UserData: 
-        Fn::Base64:
-          Fn::Join: ["\n", [
-            "#!/bin/bash",
-            "set -e",
-            "Fn::Join": ["", [
-              "Fn::Sub": "/opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource ElasticsearchAutoscalingLaunchConfiguration --region ${AWS::Region}",
-              "    --http-proxy ", "Fn::ImportValue": "DefaultProxyURL", 
-              "    --https-proxy ", "Fn::ImportValue": "DefaultProxyURL"
-            ] ],
-            "Fn::Join": ["", [
-              "Fn::Sub": "/opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource ElasticsearchAutoscaling --region ${AWS::Region}",
-              "    --http-proxy ", "Fn::ImportValue": "DefaultProxyURL", 
-              "    --https-proxy ", "Fn::ImportValue": "DefaultProxyURL"
-            ] ]
-          ] ]
-  ElasticsearchAutoscalingSecurityGroup:
-    Type: "AWS::EC2::SecurityGroup"
-    Properties:
-      VpcId:
-        Fn::ImportValue: "DefaultVpcId"
-      GroupDescription: "Elasticsearch Security Group"
-      SecurityGroupIngress:
-        - IpProtocol: "tcp"
-          FromPort: 22
-          ToPort: 22
-          CidrIp:
-            Fn::ImportValue: "DefaultManagementSubnetACidr"
-        - IpProtocol: "tcp"
-          FromPort: 22
-          ToPort: 22
-          CidrIp:
-            Fn::ImportValue: "DefaultManagementSubnetBCidr"
-      SecurityGroupEgress:
-        - IpProtocol: "tcp"
-          FromPort: 3128
-          ToPort: 3128
-          DestinationSecurityGroupId:
-            Fn::ImportValue: DefaultProxySecurityGroup
-        - IpProtocol: "udp"
-          FromPort: 53
-          ToPort: 53
-          CidrIp:
-            Fn::Join: ["", [
-              "Fn::ImportValue": "DefaultVpcDnsServer", "/32"
-            ] ]
-        - IpProtocol: "udp"
-          FromPort: 123
-          ToPort: 123
-          CidrIp: 0.0.0.0/0
-  ElasticsearchAutoscalingRole:
-    Type: "AWS::IAM::Role"
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: "Allow"
-            Principal:
-              Service: [ "ec2.amazonaws.com" ]
-            Action: [ "sts:AssumeRole" ]
-      Path: "/"
-      ManagedPolicyArns: []
-      Policies:
-        - {{ cf_cloudwatch_ec2_logs_policy | to_json }}
-        - PolicyName: "EC2ContainerInstancePolicy"
-          PolicyDocument:
-            Statement:
-              - Effect: "Allow"
-                Action:
-                  - "ecs:RegisterContainerInstance"
-                  - "ecs:DeregisterContainerInstance"
-                Resource: 
-                  Fn::Sub: "arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:cluster/${ElasticsearchCluster}"
-              - Effect: "Allow"
-                Action:
-                  - "ecs:DiscoverPollEndpoint"
-                  - "ecs:Submit*"
-                  - "ecs:Poll"
-                  - "ecs:StartTelemetrySession"
-                Resource: "*"
-              - Effect: "Allow"
-                Action: 
-                  - "ecr:BatchCheckLayerAvailability"
-                  - "ecr:BatchGetImage"
-                  - "ecr:GetDownloadUrlForLayer"
-                  - "ecr:GetAuthorizationToken"
-                Resource: "*"
-  ElasticsearchAutoscalingInstanceProfile:
-    Type: "AWS::IAM::InstanceProfile"
-    Properties:
-      Path: "/"
-      Roles: [ { "Ref": "ElasticsearchAutoscalingRole" } ]
+      Name: ElasticsearchCluster
+      CloudwatchAlarms:
+        Ref: CloudwatchAlarms
+      DesiredCount:
+        Ref: ElasticsearchDesiredCount
+      ImageId:
+        Ref: ElasticsearchImageId
+      InstanceType:
+        Ref: ElasticsearchInstanceType
+      KeyName:
+        Ref: ElasticsearchKeyName
+      Subnets: High
+      ProxyEnabled: "True"
+      ProxyUrl:
+        Fn::ImportValue: DefaultProxyURL
+      VpcName: Default
+
   ApplicationDatabase:
     Type: "AWS::RDS::DBInstance"
     DeletionPolicy: Delete
@@ -730,8 +601,6 @@ Resources:
       Path: "/"
       ManagedPolicyArns:
         - "arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceRole"
-  ElasticsearchCluster:
-    Type: "AWS::ECS::Cluster"
   ElasticsearchTaskDefinition:
     Type: "AWS::ECS::TaskDefinition"
     Properties:
@@ -762,10 +631,10 @@ Resources:
     Type: "AWS::ECS::Service"
     DependsOn:
       - ApplicationLoadBalancer
-      - ElasticsearchAutoscaling
+      - ElasticsearchClusterAutoscalingGroup
       - ElasticsearchServiceLogGroup
     Properties:
-      Cluster: { "Ref": "ElasticsearchCluster" }
+      Cluster: { "Ref": "ElasticsearchClusterEcsCluster" }
       TaskDefinition: { "Ref": "ElasticsearchTaskDefinition" }
       DesiredCount: { "Ref": "ElasticsearchDesiredCount"}
       DeploymentConfiguration:
@@ -787,7 +656,7 @@ Resources:
       - ApplicationDatabase
     Properties:
       ServiceToken:
-        Fn::Sub: ${EcsTaskRunner.Arn}
+        Fn::Sub: ${ApplicationClusterEcsTaskRunner.Arn}
       Cluster:
         Ref: ApplicationClusterEcsCluster
       TaskDefinition:
@@ -807,7 +676,7 @@ Resources:
       - DbCreateTask
     Properties:
       ServiceToken:
-        Fn::Sub: ${EcsTaskRunner.Arn}
+        Fn::Sub: ${ApplicationClusterEcsTaskRunner.Arn}
       Cluster:
         Ref: ApplicationClusterEcsCluster
       TaskDefinition:
@@ -828,7 +697,7 @@ Resources:
       - ElasticsearchService
     Properties:
       ServiceToken:
-        Fn::Sub: ${EcsTaskRunner.Arn}
+        Fn::Sub: ${ApplicationClusterEcsTaskRunner.Arn}
       Cluster:
         Ref: ApplicationClusterEcsCluster
       TaskDefinition: { "Ref": "AdhocTaskDefinition" }
@@ -847,7 +716,7 @@ Resources:
       - SearchMigrateTask
     Properties:
       ServiceToken:
-        Fn::Sub: ${EcsTaskRunner.Arn}
+        Fn::Sub: ${ApplicationClusterEcsTaskRunner.Arn}
       Cluster:
         Ref: ApplicationClusterEcsCluster
       TaskDefinition:
@@ -882,41 +751,6 @@ Resources:
     Properties:
       LogGroupName:
         Fn::Sub: ${AWS::StackName}/ecs/IntakeApiService/adhoc
-      RetentionInDays: { "Ref": "LogRetention" }
-  ElasticsearchDmesgLogGroup:
-    Type: "AWS::Logs::LogGroup"
-    DeletionPolicy: Delete
-    Properties:
-      LogGroupName: 
-        Fn::Sub: ${AWS::StackName}/ec2/ElasticsearchAutoscaling/var/log/dmesg
-      RetentionInDays: { "Ref": "LogRetention" }
-  ElasticsearchDockerLogGroup:
-    Type: "AWS::Logs::LogGroup"
-    DeletionPolicy: Delete
-    Properties:
-      LogGroupName:
-        Fn::Sub: ${AWS::StackName}/ec2/ElasticsearchAutoscaling/var/log/docker
-      RetentionInDays: { "Ref": "LogRetention" }
-  ElasticsearchEcsAgentLogGroup:
-    Type: "AWS::Logs::LogGroup"
-    DeletionPolicy: Delete
-    Properties:
-      LogGroupName: 
-        Fn::Sub: ${AWS::StackName}/ec2/ElasticsearchAutoscaling/var/log/ecs/ecs-agent
-      RetentionInDays: { "Ref": "LogRetention" }
-  ElasticsearchEcsInitLogGroup:
-    Type: "AWS::Logs::LogGroup"
-    DeletionPolicy: Delete
-    Properties:
-      LogGroupName:
-        Fn::Sub: ${AWS::StackName}/ec2/ElasticsearchAutoscaling/var/log/ecs/ecs-init
-      RetentionInDays: { "Ref": "LogRetention" }
-  ElasticsearchMessagesLogGroup:
-    Type: "AWS::Logs::LogGroup"
-    DeletionPolicy: Delete
-    Properties:
-      LogGroupName:
-        Fn::Sub: ${AWS::StackName}/ec2/ElasticsearchAutoscaling/var/log/messages
       RetentionInDays: { "Ref": "LogRetention" }
   ElasticsearchServiceLogGroup:
     Type: "AWS::Logs::LogGroup"
@@ -988,73 +822,3 @@ Resources:
             - "logs:PutLogEvents"
             Resource: 
               Fn::Sub: "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${AWS::StackName}-cfnKmsDecrypt:*:*"
-  EcsTaskRunnerLogGroup:
-    Type: "AWS::Logs::LogGroup"
-    DeletionPolicy: Delete
-    Properties:
-      LogGroupName:
-        Fn::Sub: /aws/lambda/${AWS::StackName}-cfnEcsTasks
-      RetentionInDays: { "Ref": "LogRetention" }
-  EcsTaskRunner:
-    Type: "AWS::Lambda::Function"
-    DependsOn:
-      - "EcsTaskRunnerLogGroup"
-    Properties:
-      Description: 
-        Fn::Sub: "${AWS::StackName} ECS Task Runner"
-      Handler: "ecs_tasks.handler"
-      MemorySize: 128
-      Runtime: "python2.7"
-      Timeout: 300
-      Role: 
-        Fn::Sub: ${EcsTaskRunnerRole.Arn}
-      FunctionName: 
-        Fn::Sub: "${AWS::StackName}-cfnEcsTasks"
-      Code:
-        S3Bucket: 
-          Fn::Sub: "${AWS::AccountId}-cfn-lambda"
-        S3Key: "cfnEcsTasks.zip"
-        S3ObjectVersion: { "Ref": "LambdaCfnEcsTasksVersion" }
-  EcsTaskRunnerRole:
-    Type: "AWS::IAM::Role"
-    Properties:
-      Path: "/"
-      AssumeRolePolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-        - Effect: "Allow"
-          Principal: {"Service": "lambda.amazonaws.com"}
-          Action: [ "sts:AssumeRole" ]
-      Policies:
-      - PolicyName: "ECSPermissions"
-        PolicyDocument:
-          Version: "2012-10-17"
-          Statement:
-          - Sid: "TaskDefinition"
-            Effect: "Allow"
-            Action:
-            - "ecs:DescribeTaskDefinition"
-            Resource: "*"
-          - Sid: "EcsTasks"
-            Effect: "Allow"
-            Action:
-            - "ecs:DescribeTasks"
-            - "ecs:ListTasks"
-            - "ecs:RunTask"
-            - "ecs:StartTask"
-            - "ecs:StopTask"
-            - "ecs:DescribeContainerInstances"
-            - "ecs:ListContainerInstances"
-            Resource: "*"
-            Condition:
-              ArnEquals:
-                ecs:cluster: 
-                  Fn::Sub: "arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:cluster/${ApplicationClusterEcsCluster}"
-          - Sid: "ManageLambdaLogs"
-            Effect: "Allow"
-            Action:
-            - "logs:CreateLogStream"
-            - "logs:DescribeLogStreams"
-            - "logs:PutLogEvents"
-            Resource: 
-              Fn::Sub: "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${AWS::StackName}-cfnEcsTasks:*:*"
