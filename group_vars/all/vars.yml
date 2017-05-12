@@ -1,4 +1,5 @@
 Stack.Name: "{{ 'intake-api-' + env }}"
+Stack.Upload: True
 Stack.Tags:
   org:business:owner: CA Intake
   org:business:product: Intake API
