@@ -88,6 +88,9 @@ Parameters:
   DbName:
     Type: String
     Description: Database Name
+  DbHostname:
+    Type: String
+    Description: Host name portion of friendly database FQDN
   DbUsername:
     Type: String
     Description: Database Username
@@ -116,10 +119,6 @@ Conditions:
     Fn::Equals:
       - Ref: ElasticsearchDesiredCount
       - 1
-  DbMultiAzCondition:
-    Fn::Equals:
-      - Ref: DbMultiAz
-      - "true"
 
 Resources:
   ApplicationCluster:
@@ -127,8 +126,6 @@ Resources:
     Template: asg.yml.j2
     Properties:
       Name: ApplicationCluster
-      CloudwatchAlarms:
-        Ref: CloudwatchAlarms
       DesiredCount:
         Ref: ApplicationDesiredCount
       ImageId:
@@ -322,8 +319,6 @@ Resources:
     Template: asg.yml.j2
     Properties:
       Name: ElasticsearchCluster
-      CloudwatchAlarms:
-        Ref: CloudwatchAlarms
       DesiredCount:
         Ref: ElasticsearchDesiredCount
       ImageId:
@@ -339,57 +334,25 @@ Resources:
       VpcName: Default
 
   ApplicationDatabase:
-    Type: "AWS::RDS::DBInstance"
-    DeletionPolicy: Delete
+    Type: Stack::Transform
+    Template: rds.yml.j2
     Properties:
-      AllocatedStorage: { "Ref": "DbStorage" }
-      AutoMinorVersionUpgrade: "true"
-      BackupRetentionPeriod: "7"
-      PreferredBackupWindow: "9:00-11:00"
-      PreferredMaintenanceWindow: "sun:11:30-sun:13:00"
-      StorageType: "gp2"
-      DBInstanceClass: { "Ref": "DbInstanceType" }
-      Engine: "postgres"
-      EngineVersion: "9.5"
-      MasterUsername: { "Ref": "DbUsername" }
-      MasterUserPassword:
+      Name: ApplicationDatabase
+      InstanceType:
+        Ref: DbInstanceType
+      DnsHostname:
+        Ref: DbHostname
+      DnsDomain:
+        Ref: ApplicationDomain
+      Engine: postgres
+      EngineVersion: 9.5
+      MasterUsername:
+        Ref: DbUsername
+      MasterPassword:
         Fn::Sub: ${DbPasswordDecrypt.Plaintext}
-      DBSubnetGroupName: { "Ref": "ApplicationDatabaseSubnetGroup" }
-      VPCSecurityGroups:
-        - { "Ref" : "ApplicationDatabaseSecurityGroup" }
-      MultiAZ: { "Ref": "DbMultiAz" }
-      AvailabilityZone: 
-        Fn::If:
-          - "DbMultiAzCondition"
-          - Ref: "AWS::NoValue"
-          - Fn::Sub: "${AWS::Region}a"
-      Tags:
-        - Key: "Name"
-          Value: "{{ 'intake-api-' + env + '-ApplicationDatabase' }}"
-  ApplicationDatabaseSubnetGroup:
-    Type: "AWS::RDS::DBSubnetGroup"
-    Properties:
-      DBSubnetGroupDescription: "{{ 'intake-api-' + env + '-ApplicationDatabase-db-subnet-group' }}"
-      SubnetIds: 
-        - Fn::ImportValue: DefaultHighSubnetA
-        - Fn::ImportValue: DefaultHighSubnetB
-      Tags:
-        - Key: "Name"
-          Value: "{{ 'intake-api-' + env + '-ApplicationDatabase-db-subnet-group' }}"
-  ApplicationDatabaseSecurityGroup:
-    Type: "AWS::EC2::SecurityGroup"
-    Properties:
-      GroupDescription: "{{ 'intake-api-' + env + '-ApplicationDatabase-sg' }}"
-      VpcId:
-        Fn::ImportValue: DefaultVpcId
-      SecurityGroupEgress:
-        - IpProtocol: "icmp"
-          FromPort: -1
-          ToPort: -1
-          CidrIp: "192.0.2.0/24"
-      Tags:
-        - Key: "Name"
-          Value: "{{ 'intake-api-' + env + '-ApplicationDatabase-sg' }}"
+      MultiAz:
+        Ref: DbMultiAz
+
   ApplicationClusterToApplicationDatabaseIngressTcp5432:
     Type: "AWS::EC2::SecurityGroupIngress"
     Properties:
@@ -430,7 +393,7 @@ Resources:
             Value: production
           - Name: PG_HOST
             Value:
-              Fn::Sub: ${ApplicationDatabase.Endpoint.Address}
+              Fn::Sub: ${ApplicationDatabaseDbInstance.Endpoint.Address}
           - Name: DATABASE_NAME
             Value: { "Ref": "DbName" }
           - Name: PG_USER
@@ -529,7 +492,7 @@ Resources:
             Value: production
           - Name: PG_HOST
             Value:
-              Fn::Sub: ${ApplicationDatabase.Endpoint.Address}
+              Fn::Sub: ${ApplicationDatabaseDbInstance.Endpoint.Address}
           - Name: DATABASE_NAME
             Value: { "Ref": "DbName" }
           - Name: PG_USER
@@ -653,7 +616,7 @@ Resources:
     Type: "Custom::ECSTask"
     DependsOn:
       - ApplicationClusterAutoscalingGroup
-      - ApplicationDatabase
+      - ApplicationDatabaseDbInstance
     Properties:
       ServiceToken:
         Fn::Sub: ${ApplicationClusterEcsTaskRunner.Arn}
