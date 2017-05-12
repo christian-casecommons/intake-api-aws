@@ -23,10 +23,10 @@ Parameters:
   ApplicationKeyName:
     Type: String
     Description: EC2 Key Pair for Application SSH Access
-  ApplicationLoadBalancerPort:
+  ApplicationFrontEndPort:
     Type: Number
     Description: Application Front End HTTP Port
-  ApplicationLoadBalancerCertificateArn:
+  ApplicationFrontEndCertificateArn:
     Type: String
     Description: Name of CloudFormation export with Application Load Balancer certificate ARN
   ApplicationPort:
@@ -60,7 +60,7 @@ Parameters:
   ElasticsearchKeyName:
     Type: String
     Description: EC2 Key Pair for Elasticsearch SSH Access
-  ElasticsearchLoadBalancerPort:
+  ElasticsearchFrontEndPort:
     Type: Number
     Description: Elasticsearch Front End HTTP Port
   ElasticsearchPort:
@@ -121,6 +121,40 @@ Conditions:
       - 1
 
 Resources:
+  ApplicationFrontEnd:
+    Type: Stack::Transform
+    Template: alb.yml.j2
+    Properties:
+      Name: ApplicationFrontEnd
+      Certificate:
+        Fn::ImportValue: 
+          Ref: ApplicationFrontEndCertificateArn
+      CustomSecurityGroup:
+        Ref: ApplicationFrontEndCustomSecurityGroup
+      CustomSecurityGroupEnabled: "true"
+      DefaultTargetGroup:
+        Ref: IntakeApiServiceTargetGroup
+      DnsHostname:
+        Ref: ApplicationHostname
+      DnsDomain:
+        Ref: ApplicationDomain
+      HttpsPort:
+        Ref: ApplicationFrontEndPort
+      Scheme: internet-facing
+      Subnets: Public
+  ApplicationFrontEndCustomSecurityGroup:
+    Type: "AWS::EC2::SecurityGroup"
+    Properties:
+      VpcId:
+        Fn::ImportValue: DefaultVpcId
+      GroupDescription: Intake API Load Balancer Security Group
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort:
+            Ref: ApplicationFrontEndPort
+          ToPort:
+            Ref: ApplicationFrontEndPort
+          CidrIp: 0.0.0.0/0
   ApplicationCluster:
     Type: Stack::Transform
     Template: asg.yml.j2
@@ -139,51 +173,6 @@ Resources:
       ProxyUrl:
         Fn::ImportValue: DefaultProxyURL
       VpcName: Default
-
-  ApplicationDnsRecord:
-    Type: "AWS::Route53::RecordSet"
-    Properties:
-      Name: 
-        Fn::Sub: "${ApplicationHostname}.${ApplicationDomain}"
-      TTL: "300"
-      HostedZoneName: 
-        Fn::Sub: "${ApplicationDomain}."
-      Type: "CNAME"
-      Comment: 
-        Fn::Sub: "Intake API Application - ${AWS::StackName}"
-      ResourceRecords: 
-        - Fn::Sub: "${ApplicationLoadBalancer.DNSName}"
-  ApplicationLoadBalancer:
-    Type: "AWS::ElasticLoadBalancingV2::LoadBalancer"
-    Properties:
-      Scheme: "internet-facing"
-      SecurityGroups:
-       - Ref: "ApplicationLoadBalancerSecurityGroup"
-      Subnets:
-        - Fn::ImportValue: DefaultPublicSubnetA
-        - Fn::ImportValue: DefaultPublicSubnetB
-      LoadBalancerAttributes: 
-        - Key: "deletion_protection.enabled"
-          Value: false
-        - Key: "idle_timeout.timeout_seconds"
-          Value: 30
-      Tags:
-        - Key: "Name"
-          Value:
-            Fn::Sub: ${AWS::StackName}-lb
-  ApplicationLoadBalancerApplicationListener:
-    Type: "AWS::ElasticLoadBalancingV2::Listener"
-    Properties:
-      Certificates:
-        - CertificateArn:
-            Fn::ImportValue:
-              Ref: ApplicationLoadBalancerCertificateArn
-      DefaultActions:
-        - TargetGroupArn: { "Ref": "IntakeApiServiceTargetGroup" }
-          Type: forward
-      LoadBalancerArn: { "Ref": "ApplicationLoadBalancer" }
-      Port: { "Ref": "ApplicationLoadBalancerPort" }
-      Protocol: "HTTPS"
   IntakeApiServiceTargetGroup:
     Type: "AWS::ElasticLoadBalancingV2::TargetGroup"
     Properties:
@@ -195,92 +184,53 @@ Resources:
       TargetGroupAttributes:
         - Key: "deregistration_delay.timeout_seconds"
           Value: 60
-  ApplicationLoadBalancerSecurityGroup:
-    Type: "AWS::EC2::SecurityGroup"
-    Properties:
-      VpcId:
-        Fn::ImportValue: "DefaultVpcId"
-      GroupDescription: "Intake API Load Balancer Security Group"
-      SecurityGroupIngress:
-        - IpProtocol: "tcp"
-          FromPort: { "Ref": "ApplicationLoadBalancerPort" }
-          ToPort: { "Ref": "ApplicationLoadBalancerPort" }
-          CidrIp: "0.0.0.0/0"
-  ApplicationLoadBalancerToApplicationIngress:
+  ApplicationFrontEndToApplicationIngress:
     Type: "AWS::EC2::SecurityGroupIngress"
     Properties:
       IpProtocol: "tcp"
       FromPort: { "Ref": "ApplicationPort" }
       ToPort: { "Ref": "ApplicationPort" }
       GroupId: { "Ref": "ApplicationClusterSecurityGroup" }
-      SourceSecurityGroupId: { "Ref": "ApplicationLoadBalancerSecurityGroup" }
-  ApplicationLoadBalancerToApplicationEgress:
+      SourceSecurityGroupId: { "Ref": "ApplicationFrontEndSecurityGroup" }
+  ApplicationFrontEndToApplicationEgress:
     Type: "AWS::EC2::SecurityGroupEgress"
     Properties:
       IpProtocol: "tcp"
       FromPort: { "Ref": "ApplicationPort" }
       ToPort: { "Ref": "ApplicationPort" }
-      GroupId: { "Ref": "ApplicationLoadBalancerSecurityGroup" }
+      GroupId: { "Ref": "ApplicationFrontEndSecurityGroup" }
       DestinationSecurityGroupId: { "Ref": "ApplicationClusterSecurityGroup" }
-  ApplicationToElasticsearchLoadBalancerIngress:
+  ApplicationToElasticsearchFrontEndIngress:
     Type: "AWS::EC2::SecurityGroupIngress"
     Properties:
       IpProtocol: "tcp"
-      FromPort: { "Ref": "ElasticsearchLoadBalancerPort"}
-      ToPort: { "Ref": "ElasticsearchLoadBalancerPort"}
-      GroupId: { "Ref": "ElasticsearchLoadBalancerSecurityGroup" }
+      FromPort: { "Ref": "ElasticsearchFrontEndPort"}
+      ToPort: { "Ref": "ElasticsearchFrontEndPort"}
+      GroupId: { "Ref": "ElasticsearchFrontEndSecurityGroup" }
       SourceSecurityGroupId: { "Ref": "ApplicationClusterSecurityGroup" }
-  ApplicationToElasticsearchLoadBalancerEgress:
+  ApplicationToElasticsearchFrontEndEgress:
     Type: "AWS::EC2::SecurityGroupEgress"
     Properties:
       IpProtocol: "tcp"
-      FromPort: { "Ref": "ElasticsearchLoadBalancerPort"}
-      ToPort: { "Ref": "ElasticsearchLoadBalancerPort"}
+      FromPort: { "Ref": "ElasticsearchFrontEndPort"}
+      ToPort: { "Ref": "ElasticsearchFrontEndPort"}
       GroupId: { "Ref": "ApplicationClusterSecurityGroup" }
-      DestinationSecurityGroupId: { "Ref": "ElasticsearchLoadBalancerSecurityGroup" }
-  ElasticsearchDnsRecord:
-    Type: "AWS::Route53::RecordSet"
+      DestinationSecurityGroupId: { "Ref": "ElasticsearchFrontEndSecurityGroup" }
+  ElasticsearchFrontEnd:
+    Type: Stack::Transform
+    Template: alb.yml.j2
     Properties:
-      Name:
-        Fn::Join: ["", [
-          "Fn::Sub": "${ElasticsearchHostname}.",
-          "Fn::ImportValue": "DefaultVpcDomain"
-        ] ]
-      TTL: "300"
-      HostedZoneName:
-        Fn::ImportValue: DefaultVpcZone
-      Type: "CNAME"
-      Comment: 
-        Fn::Sub: "Intake API Elasticsearch - ${AWS::StackName}"
-      ResourceRecords: 
-        - Fn::Sub: "${ElasticsearchLoadBalancer.DNSName}"
-  ElasticsearchLoadBalancer:
-    Type: "AWS::ElasticLoadBalancingV2::LoadBalancer"
-    Properties:
-      Scheme: "internal"
-      SecurityGroups:
-       - Ref: "ElasticsearchLoadBalancerSecurityGroup"
-      Subnets:
-        - Fn::ImportValue: DefaultHighSubnetA
-        - Fn::ImportValue: DefaultHighSubnetB
-      LoadBalancerAttributes: 
-        - Key: "deletion_protection.enabled"
-          Value: false
-        - Key: "idle_timeout.timeout_seconds"
-          Value: 30
-      Tags:
-        - Key: "Name"
-          Value:
-            Fn::Sub: ${AWS::StackName}-elasticsearch-lb
-  ElasticsearchLoadBalancerListener:
-    Type: "AWS::ElasticLoadBalancingV2::Listener"
-    Properties:
-      DefaultActions:
-        - TargetGroupArn: { "Ref": "ElasticsearchServiceTargetGroup" }
-          Type: forward
-      LoadBalancerArn: { "Ref": "ElasticsearchLoadBalancer" }
-      Port: { "Ref": "ElasticsearchLoadBalancerPort" }
-      Protocol: "HTTP"
+      Name: ElasticsearchFrontEnd
+      DefaultTargetGroup:
+        Ref: ElasticsearchServiceTargetGroup
+      DnsHostname:
+        Ref: ElasticsearchHostname
+      DnsDomain:
+        Ref: ApplicationDomain
+      HttpPort:
+        Ref: ElasticsearchFrontEndPort
+      Scheme: internal
+      Subnets: High
   ElasticsearchServiceTargetGroup:
     Type: "AWS::ElasticLoadBalancingV2::TargetGroup"
     Properties:
@@ -291,27 +241,21 @@ Resources:
       TargetGroupAttributes:
         - Key: "deregistration_delay.timeout_seconds"
           Value: 60
-  ElasticsearchLoadBalancerSecurityGroup:
-    Type: "AWS::EC2::SecurityGroup"
-    Properties:
-      VpcId:
-        Fn::ImportValue: "DefaultVpcId"
-      GroupDescription: "Intake API Elasticsearch Load Balancer Security Group"
-  ElasticsearchLoadBalancerToElasticsearchIngress:
+  ElasticsearchFrontEndToElasticsearchIngress:
     Type: "AWS::EC2::SecurityGroupIngress"
     Properties:
       IpProtocol: "tcp"
       FromPort: { "Ref": "ElasticsearchPort" }
       ToPort: { "Ref": "ElasticsearchPort" }
       GroupId: { "Ref": "ElasticsearchClusterSecurityGroup" }
-      SourceSecurityGroupId: { "Ref": "ElasticsearchLoadBalancerSecurityGroup" }
-  ElasticsearchLoadBalancerToElasticsearchEgress:
+      SourceSecurityGroupId: { "Ref": "ElasticsearchFrontEndSecurityGroup" }
+  ElasticsearchFrontEndToElasticsearchEgress:
     Type: "AWS::EC2::SecurityGroupEgress"
     Properties:
       IpProtocol: "tcp"
       FromPort: { "Ref": "ElasticsearchPort" }
       ToPort: { "Ref": "ElasticsearchPort" }
-      GroupId: { "Ref": "ElasticsearchLoadBalancerSecurityGroup" }
+      GroupId: { "Ref": "ElasticsearchFrontEndSecurityGroup" }
       DestinationSecurityGroupId: { "Ref": "ElasticsearchClusterSecurityGroup" }
   
   ElasticsearchCluster:
@@ -527,7 +471,7 @@ Resources:
   IntakeApiService:
     Type: "AWS::ECS::Service"
     DependsOn:
-      - ApplicationLoadBalancer
+      - ApplicationFrontEndLoadBalancerHttpsListener
       - ApplicationClusterAutoscalingGroup
       - IntakeApiServiceLogGroup
       - IntakeApiNginxLogGroup
@@ -593,7 +537,7 @@ Resources:
   ElasticsearchService:
     Type: "AWS::ECS::Service"
     DependsOn:
-      - ApplicationLoadBalancer
+      - ElasticsearchFrontEndLoadBalancerHttpListener
       - ElasticsearchClusterAutoscalingGroup
       - ElasticsearchServiceLogGroup
     Properties:

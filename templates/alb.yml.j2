@@ -1,0 +1,332 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: Application Load Balancer Stack
+
+Parameters:
+  AzCount:
+    Type: Number
+    Description: Number of AZs to deploy
+    Default: 2
+    AllowedValues:
+      - 2
+      - 3
+  ConnectionIdleTimeout:
+    Type: Number
+    Description: Connection idle timeout in seconds
+    Default: 30
+  CloudwatchAlarms:
+    Type: String
+    Description: ARN of SNS topic for CloudWatch Alarms
+    Default: ""
+  DefaultTargetGroup:
+    Type: String
+    Description: ARN of default target group
+  DeleteProtectionEnabled:
+    Type: String
+    Description: Enables or disables delete protection
+    Default: "false"
+    AllowedValues:
+      - "true"
+      - "false"
+  DnsHostname:
+    Type: String
+    Description: Hostname portion of FQDN of load balancer
+  DnsDomain:
+    Type: String
+    Description: Domain portion of FQDN of load balancer
+  Certificate:
+    Type: String
+    Description: CloudFormation export that defines certificate ARN
+    Default: ""
+  CustomSecurityGroup:
+    Type: String
+    Description: Custom load balancer security group Id to attach to load balancer
+    Default: ""
+  CustomSecurityGroupEnabled:
+    Type: String
+    Description: Enables a custom security group
+    Default: "False"
+    AllowedValues:
+      - "False"
+      - "false"
+      - "True"
+      - "true"
+  Name:
+    Type: String
+    Description: Name of load balancer
+    Default: ApplicationLoadBalancer
+  Scheme:
+    Type: String
+    Description: Load balancer scheme
+    AllowedValues:
+      - internet-facing
+      - internal
+  HttpPort:
+    Type: Number
+    Description: Load balancer HTTP listener port
+    Default: 0
+  HttpsPort:
+    Type: Number
+    Description: Load balancer HTTPS listener port
+    Default: 0
+  Subnets:
+    Type: String
+    Description: Subnet the load balancer instances will be deployed to
+    AllowedValues:
+      - Medium
+      - High
+      - Management
+      - Public
+  VpcName:
+    Type: String
+    Description: CloudFormation export prefix that defines the target VPC
+    Default: Default
+
+Conditions:
+  CustomSecurityGroupDefined:
+    Fn::Or:
+      - Fn::Equals:
+        - Ref: CustomSecurityGroupEnabled
+        - "True"
+      - Fn::Equals:
+        - Ref: CustomSecurityGroupEnabled
+        - "true"
+  HttpEnabled:
+    Fn::Not:
+      - Fn::Equals:
+        - Ref: HttpPort
+        - 0
+  HttpsEnabled:
+    Fn::Not:
+      - Fn::Equals:
+        - Ref: HttpsPort
+        - 0
+  CloudwatchAlarmsTopicExists:
+    Fn::Not:
+      - Fn::Equals:
+        - Ref: CloudwatchAlarms
+        - ""
+  ThreeAzCondition:
+    Fn::Equals:
+      - Ref: AzCount
+      - 3
+
+Resources:
+  DnsRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      Name: 
+        Fn::Sub: ${DnsHostname}.${DnsDomain}
+      TTL: 300
+      HostedZoneName:
+        Fn::Sub: ${DnsDomain}.
+      Type: CNAME
+      Comment: 
+        Fn::Sub: ${AWS::StackName} ${Name} DNS Record
+      ResourceRecords: 
+        - Fn::Sub: ${LoadBalancer.DNSName}
+  LoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Scheme:
+        Ref: Scheme
+      SecurityGroups:
+        Fn::If:
+          - CustomSecurityGroupDefined
+          - - Ref: SecurityGroup
+            - Ref: CustomSecurityGroup
+          - - Ref: SecurityGroup
+      Subnets:
+        Fn::If:
+          - ThreeAzCondition
+          - - Fn::ImportValue:
+                Fn::Sub: ${VpcName}${Subnets}SubnetA
+            - Fn::ImportValue:
+                Fn::Sub: ${VpcName}${Subnets}SubnetB
+            - Fn::ImportValue:
+                Fn::Sub: ${VpcName}${Subnets}SubnetC
+          - - Fn::ImportValue:
+                Fn::Sub: ${VpcName}${Subnets}SubnetA
+            - Fn::ImportValue:
+                Fn::Sub: ${VpcName}${Subnets}SubnetB
+      LoadBalancerAttributes:
+        - Key: deletion_protection.enabled
+          Value:
+            Ref: DeleteProtectionEnabled
+        - Key: idle_timeout.timeout_seconds
+          Value:
+            Ref: ConnectionIdleTimeout
+      Tags: 
+        - Key: Name
+          Value: 
+            Fn::Sub: ${AWS::StackName}-${Name}
+  SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: 
+        Fn::Sub: ${AWS::StackName} ${Name} Security Group
+      VpcId:
+        Fn::ImportValue:
+          Fn::Sub: ${VpcName}VpcId
+      SecurityGroupEgress:
+        - IpProtocol: icmp
+          FromPort: -1
+          ToPort: -1
+          CidrIp: 192.0.2.0/32
+      SecurityGroupIngress:
+        - IpProtocol: icmp
+          FromPort : -1
+          ToPort : -1
+          CidrIp:
+              Fn::ImportValue:
+                Fn::Sub: ${VpcName}ManagementSubnetACidr
+        - IpProtocol: icmp
+          FromPort : -1
+          ToPort : -1
+          CidrIp:
+              Fn::ImportValue:
+                Fn::Sub: ${VpcName}ManagementSubnetBCidr
+      Tags:
+        - Key: Name
+          Value:
+            Fn::Sub: ${AWS::StackName}-${Name}-sg
+  LoadBalancerHttpListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Condition: HttpEnabled
+    Properties:
+      DefaultActions:
+        - TargetGroupArn:
+            Ref: DefaultTargetGroup
+          Type: forward
+      LoadBalancerArn:
+        Ref: LoadBalancer
+      Port:
+        Ref: HttpPort
+      Protocol: HTTP
+  LoadBalancerHttpsListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Condition: HttpsEnabled
+    Properties:
+      DefaultActions:
+        - TargetGroupArn:
+            Ref: DefaultTargetGroup
+          Type: forward
+      LoadBalancerArn:
+        Ref: LoadBalancer
+      Port:
+        Ref: HttpsPort
+      Protocol: HTTPS
+      Certificates:
+        - CertificateArn:
+            Ref: Certificate
+  LoadBalancerTargetResponseTime:
+    Type: AWS::CloudWatch::Alarm
+    DependsOn:
+      - LoadBalancer
+    Properties:
+      AlarmDescription: alb latency check
+      MetricName: TargetResponseTime
+      Namespace: AWS/ApplicationELB
+      Statistic: Average
+      Period: 60
+      EvaluationPeriods: 5
+      Threshold: 2
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      Dimensions:
+        - Name: LoadBalancer
+          Value:
+            Fn::Sub: ${LoadBalancer.LoadBalancerFullName}
+  LoadBalancerUnHealthyHostCount:
+    Type: "AWS::CloudWatch::Alarm"
+    DependsOn:
+      - LoadBalancer
+    Properties:
+      AlarmDescription: alb unhealthy host check
+      MetricName: UnHealthyHostCount
+      Namespace: AWS/ApplicationELB
+      Statistic: Minimum
+      Period: 60
+      EvaluationPeriods: 10
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      Dimensions:
+        - Name: LoadBalancer
+          Value:
+            Fn::Sub: ${LoadBalancer.LoadBalancerFullName}
+  LoadBalancerHTTPCodeELB5XX:
+    Type: "AWS::CloudWatch::Alarm"
+    DependsOn:
+      - LoadBalancer
+    Properties:
+      AlarmDescription: alb HTTP 5XX code check
+      MetricName: HTTPCode_ELB_5XX_Count
+      Namespace: AWS/ApplicationELB
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: 5
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      Dimensions:
+        - Name: LoadBalancer
+          Value:
+            Fn::Sub: ${LoadBalancer.LoadBalancerFullName}
+  LoadBalancerRejectedConnectionCount:
+    Type: "AWS::CloudWatch::Alarm"
+    DependsOn:
+      - LoadBalancer
+    Properties:
+      AlarmDescription: alb rejected connection count check
+      MetricName: RejectedConnectionCount
+      Namespace: AWS/ApplicationELB
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: 10
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      Dimensions:
+        - Name: LoadBalancer
+          Value:
+            Fn::Sub: ${LoadBalancer.LoadBalancerFullName}
+Outputs:
+  DnsRecord:
+    Description: Load Balancer DNS Record
+    Value:
+      Ref: DnsRecord
+  Arn:
+    Description: Load Balancer ARN
+    Value:
+      Ref: LoadBalancer
+  HttpListener:
+    Description: HTTP Listener
+    Condition: HttpEnabled
+    Value:
+      Ref: LoadBalancerHttpListener
+  HttpsListener:
+    Description: HTTPS Listener
+    Condition: HttpsEnabled
+    Value:
+      Ref: LoadBalancerHttpsListener
+  SecurityGroup: 
+    Description: Load Balancer Security Group
+    Value:
+      Ref: SecurityGroup

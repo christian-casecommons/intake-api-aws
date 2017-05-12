@@ -11,7 +11,6 @@ Stack.Inputs.ApplicationDesiredCount: 2
 Stack.Inputs.ApplicationImageId: ami-bb75e3db
 Stack.Inputs.ApplicationDockerImage: 429614120872.dkr.ecr.us-west-2.amazonaws.com/cwds/intake-api
 Stack.Inputs.ApplicationDockerImageTag: latest
-Stack.Inputs.ApplicationLoadBalancerPort: 443
 Stack.Inputs.ApplicationPort: 3000
 Stack.Inputs.ApplicationSecretKey: AQECAHgohc0dbuzR1L3lEdEkDC96PMYUEV9nITogJU2vbocgQAAAAIswgYgGCSqGSIb3DQEHBqB7MHkCAQAwdAYJKoZIhvcNAQcBMB4GCWCGSAFlAwQBLjARBAxmShgWJUrvG2uXdzkCARCAR3LpbhDDkVi6Rkz6mo+yD4QKeT71vT4HDA+yFdW4Ig9iJSd761OyGA1Q2kxfl1vnF+pbdYq3LiNptFEFttJsd/drMJ5I6vzo
 Stack.Inputs.ApplicationHostname: justin-intake-api
@@ -22,7 +21,8 @@ Stack.Inputs.NginxDockerImage: 429614120872.dkr.ecr.us-west-2.amazonaws.com/cwds
 Stack.Inputs.NginxDockerImageTag: latest
 
 # Load balancer settings
-Stack.Inputs.ApplicationLoadBalancerCertificateArn: CaMycasebookOrgCertArn
+Stack.Inputs.ApplicationFrontEndPort: 443
+Stack.Inputs.ApplicationFrontEndCertificateArn: CaMycasebookOrgCertArn
 
 # Elasticsearch settings
 Stack.Inputs.ElasticsearchKeyName: admin-shared-key
@@ -31,7 +31,7 @@ Stack.Inputs.ElasticsearchDesiredCount: 1
 Stack.Inputs.ElasticsearchImageId: ami-bb75e3db
 Stack.Inputs.ElasticsearchDockerImage: 429614120872.dkr.ecr.us-west-2.amazonaws.com/cwds/elasticsearch
 Stack.Inputs.ElasticsearchDockerImageTag: 2.4
-Stack.Inputs.ElasticsearchLoadBalancerPort: 9200
+Stack.Inputs.ElasticsearchFrontEndPort: 9200
 Stack.Inputs.ElasticsearchPort: 9200
 Stack.Inputs.ElasticsearchHostname: justin-intake-api-es
 
