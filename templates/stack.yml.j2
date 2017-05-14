@@ -137,13 +137,13 @@ Resources:
         Ref: ApplicationHostname
       DnsDomain:
         Ref: ApplicationDomain
-      HealthCheckPath: /api/v1/screenings
       HttpsPort:
         Ref: ApplicationFrontEndPort
       Scheme: internet-facing
       Subnets: Public
       TargetGroupPort:
         Ref: ApplicationPort
+      TargetGroupHealthCheck: /api/v1/screenings
       TargetSecurityGroup:
         Fn::Sub: ${ApplicationCluster.SecurityGroup}
   ApplicationCluster:
