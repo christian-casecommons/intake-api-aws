@@ -99,14 +99,17 @@ Parameters:
     Type: String
     Description: Enable/disable database multi AZ operation
     Default: "False"
-    AllowedValues: ["True", "False"]
-  LambdaCfnKmsDecryptVersion:
+    AllowedValues:
+      - "True"
+      - "False"
   KMSDecrypterVersion:
     Type: String
     Description: S3 Object Version of CloudFormation KMS Decrypt function
     Default: latest
+  EcsTasksVersion:
     Type: String
     Description: S3 Object Version of CloudFormation ECS Tasks function
+    Default: latest
 
 Conditions:
   ApplicationSingleInstanceCondition:
@@ -119,6 +122,7 @@ Conditions:
       - 1
 
 Resources:
+  # Intake API resources
   ApplicationFrontEnd:
     Type: Stack::Transform
     Template: alb.yml.j2
@@ -301,6 +305,8 @@ Resources:
       ProxyUrl:
         Fn::ImportValue: DefaultProxyURL
       VpcName: Default
+
+  # RDS resources
   ApplicationDatabase:
     Type: Stack::Transform
     Template: rds.yml.j2
@@ -346,7 +352,7 @@ Resources:
             Value: production
           - Name: PG_HOST
             Value:
-              Fn::Sub: ${ApplicationDatabaseDbInstance.Endpoint.Address}
+              Fn::Sub: ${ApplicationDatabase.EndPoint}
           - Name: DATABASE_NAME
             Value:
               Ref: DbName
@@ -486,6 +492,30 @@ Resources:
                   - Fn::ImportValue: DefaultVpcDomain
           - Name: CLEAR_PROXY
             Value: "true"
+  IntakeApiServiceLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    Properties:
+      LogGroupName:
+        Fn::Sub: ${AWS::StackName}/ecs/IntakeApiService/intake-api
+      RetentionInDays:
+        Ref: LogRetention
+  IntakeApiNginxLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    Properties:
+      LogGroupName:
+        Fn::Sub: ${AWS::StackName}/ecs/IntakeApiService/nginx
+      RetentionInDays:
+        Ref: LogRetention
+  IntakeApiAdhocLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    Properties:
+      LogGroupName:
+        Fn::Sub: ${AWS::StackName}/ecs/IntakeApiService/adhoc
+      RetentionInDays:
+        Ref: LogRetention
   IntakeApiService:
     Type: AWS::ECS::Service
     DependsOn:
@@ -519,20 +549,8 @@ Resources:
             Fn::Sub: ${ApplicationFrontEnd.TargetGroup}
       Role:
         Ref: EcsServiceRole
-  EcsServiceRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: Allow
-            Principal: 
-              Service:
-                - ecs.amazonaws.com
-            Action:
-              - sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceRole
+
+  # Elasticsearch ECS resources
   ElasticsearchTaskDefinition:
     Type: AWS::ECS::TaskDefinition
     Properties:
@@ -561,10 +579,18 @@ Resources:
         MountPoints:
           - SourceVolume: esdata
             ContainerPath: /var/lib/elasticsearch/data
+  ElasticsearchServiceLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    Properties:
+      LogGroupName:
+        Fn::Sub: ${AWS::StackName}/ecs/ElasticsearchService/elasticsearch
+      RetentionInDays:
+        Ref: LogRetention
   ElasticsearchService:
     Type: AWS::ECS::Service
     DependsOn:
-      - ElasticsearchFrontEndLoadBalancerHttpListener
+      - ElasticsearchFrontEndHttpListener
       - ElasticsearchClusterAutoscalingGroup
       - ElasticsearchServiceLogGroup
     Properties:
@@ -589,6 +615,8 @@ Resources:
             Ref: ElasticsearchFrontEndTargetGroup
       Role:
         Ref: EcsServiceRole
+
+  # ECS Tasks
   DbCreateTask:
     Type: Custom::ECSTask
     DependsOn:
@@ -596,7 +624,7 @@ Resources:
       - ApplicationDatabaseDbInstance
     Properties:
       ServiceToken:
-        Fn::Sub: ${ApplicationClusterEcsTaskRunner.Arn}
+        Fn::Sub: ${ApplicationCluster.EcsTaskRunner}
       Cluster:
         Ref: ApplicationClusterEcsCluster
       TaskDefinition:
@@ -616,7 +644,7 @@ Resources:
       - DbCreateTask
     Properties:
       ServiceToken:
-        Fn::Sub: ${ApplicationClusterEcsTaskRunner.Arn}
+        Fn::Sub: ${ApplicationCluster.EcsTaskRunner}
       Cluster:
         Ref: ApplicationClusterEcsCluster
       TaskDefinition:
@@ -637,7 +665,7 @@ Resources:
       - ElasticsearchService
     Properties:
       ServiceToken:
-        Fn::Sub: ${ApplicationClusterEcsTaskRunner.Arn}
+        Fn::Sub: ${ApplicationCluster.EcsTaskRunner}
       Cluster:
         Ref: ApplicationClusterEcsCluster
       TaskDefinition:
@@ -657,7 +685,7 @@ Resources:
       - SearchMigrateTask
     Properties:
       ServiceToken:
-        Fn::Sub: ${ApplicationClusterEcsTaskRunner.Arn}
+        Fn::Sub: ${ApplicationCluster.EcsTaskRunner}
       Cluster:
         Ref: ApplicationClusterEcsCluster
       TaskDefinition:
@@ -673,38 +701,24 @@ Resources:
               - search:reindex
       RetentionInDays:
         Ref: LogRetention
-  IntakeApiServiceLogGroup:
-    Type: AWS::Logs::LogGroup
-    DeletionPolicy: Delete
+  
+  # IAM role for ECS services
+  EcsServiceRole:
+    Type: AWS::IAM::Role
     Properties:
-      LogGroupName:
-        Fn::Sub: ${AWS::StackName}/ecs/IntakeApiService/intake-api
-      RetentionInDays:
-        Ref: LogRetention
-  IntakeApiNginxLogGroup:
-    Type: AWS::Logs::LogGroup
-    DeletionPolicy: Delete
-    Properties:
-      LogGroupName:
-        Fn::Sub: ${AWS::StackName}/ecs/IntakeApiService/nginx
-      RetentionInDays:
-        Ref: LogRetention
-  IntakeApiAdhocLogGroup:
-    Type: AWS::Logs::LogGroup
-    DeletionPolicy: Delete
-    Properties:
-      LogGroupName:
-        Fn::Sub: ${AWS::StackName}/ecs/IntakeApiService/adhoc
-      RetentionInDays:
-        Ref: LogRetention
-  ElasticsearchServiceLogGroup:
-    Type: AWS::Logs::LogGroup
-    DeletionPolicy: Delete
-    Properties:
-      LogGroupName:
-        Fn::Sub: ${AWS::StackName}/ecs/ElasticsearchService/elasticsearch
-      RetentionInDays:
-        Ref: LogRetention
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: 
+              Service:
+                - ecs.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceRole
+
+  # Secrets custom resource
   DbPasswordDecrypt:
     Type: Custom::KMSDecrypt
     Properties:

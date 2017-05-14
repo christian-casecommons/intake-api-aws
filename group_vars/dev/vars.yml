@@ -4,6 +4,12 @@ Sts.Role: arn:aws:iam::429614120872:role/remoteAdmin
 # Stack settings
 Stack.Name: intake-api-dev
 
+# Global overrides for all resources of the given type
+AWS::Logs::LogGroup:
+  DeletionPolicy: Delete
+AWS::RDS::DBInstance:
+  DeletionPolicy: Delete
+
 # Application settings
 Stack.Inputs.ApplicationKeyName: admin-shared-key
 Stack.Inputs.ApplicationInstanceType: t2.micro
@@ -31,7 +37,6 @@ Stack.Inputs.ElasticsearchDesiredCount: 1
 Stack.Inputs.ElasticsearchImageId: ami-bb75e3db
 Stack.Inputs.ElasticsearchDockerImage: 429614120872.dkr.ecr.us-west-2.amazonaws.com/cwds/elasticsearch
 Stack.Inputs.ElasticsearchDockerImageTag: 2.4
-Stack.Inputs.ElasticsearchFrontEndPort: 9200
 Stack.Inputs.ElasticsearchPort: 9200
 Stack.Inputs.ElasticsearchHostname: dev-intake-api-es
 
@@ -46,13 +51,6 @@ Stack.Inputs.DbPassword: AQECAHgohc0dbuzR1L3lEdEkDC96PMYUEV9nITogJU2vbocgQAAAAG4
 # Log settings
 Stack.Inputs.LogRetention: 30
 
-# Add a global override to resources of the given type
-AWS::Logs::LogGroup:
-  DeletionPolicy: Delete
-
-AWS::RDS::DBInstance:
-  DeletionPolicy: Delete
-
 # CloudFormation custom resource settings
-Stack.Inputs.LambdaCfnKmsDecryptVersion: "86jHvErMu.CpTjqBvSlJabgr22pYGa9S"
-Stack.Inputs.LambdaCfnEcsTasksVersion: "gyujkgVKoH.NVeeuLYTi_7n_NUburwa4"
+Stack.Inputs.KmsDecrypterVersion: "86jHvErMu.CpTjqBvSlJabgr22pYGa9S"
+Stack.Inputs.EcsTasksVersion: "gyujkgVKoH.NVeeuLYTi_7n_NUburwa4"
