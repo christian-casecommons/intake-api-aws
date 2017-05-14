@@ -56,3 +56,19 @@ Stack.Inputs.LogRetention: 30
 # CloudFormation custom resource settings
 Stack.Inputs.KmsDecrypterVersion: "86jHvErMu.CpTjqBvSlJabgr22pYGa9S"
 Stack.Inputs.EcsTasksVersion: "gyujkgVKoH.NVeeuLYTi_7n_NUburwa4"
+
+# Example stack overrides
+# Stack.Resources.ApplicationFrontEndSecurityGroup.Properties.SecurityGroupIngress:
+#   Property::Transform:
+#     - security_rules
+#     - - IpProtocol: tcp
+#         Ports:
+#           - 80
+#           - 443
+#           - tcp/800-802
+#         CidrIp:
+#           - 10.8.0.0/15
+#           - 10.30.0.0/16
+#           - 10.199.0.0/16
+#           - 172.17.0.0/16
+#           - 172.21.0.0/16
