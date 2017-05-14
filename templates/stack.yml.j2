@@ -60,9 +60,6 @@ Parameters:
   ElasticsearchKeyName:
     Type: String
     Description: EC2 Key Pair for Elasticsearch SSH Access
-  ElasticsearchFrontEndPort:
-    Type: Number
-    Description: Elasticsearch Front End HTTP Port
   ElasticsearchPort:
     Type: Number
     Description: Elasticsearch Port
@@ -130,19 +127,21 @@ Resources:
       Certificate:
         Fn::ImportValue: 
           Ref: ApplicationFrontEndCertificateArn
+      ConnectionDrainTimeout: 60
       CustomSecurityGroup:
         Ref: ApplicationFrontEndCustomSecurityGroup
       CustomSecurityGroupEnabled: "true"
-      DefaultTargetGroup:
-        Ref: IntakeApiServiceTargetGroup
       DnsHostname:
         Ref: ApplicationHostname
       DnsDomain:
         Ref: ApplicationDomain
+      HealthCheckPath: /api/v1/screenings
       HttpsPort:
         Ref: ApplicationFrontEndPort
       Scheme: internet-facing
       Subnets: Public
+      TargetGroupPort:
+        Ref: ApplicationPort
   ApplicationFrontEndCustomSecurityGroup:
     Type: "AWS::EC2::SecurityGroup"
     Properties:
@@ -156,18 +155,30 @@ Resources:
           ToPort:
             Ref: ApplicationFrontEndPort
           CidrIp: 0.0.0.0/0
-  IntakeApiServiceTargetGroup:
-    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+  ApplicationFrontEndToApplicationIngress:
+    Type: AWS::EC2::SecurityGroupIngress
     Properties:
-      VpcId:
-        Fn::ImportValue: DefaultVpcId
-      Protocol: HTTP
-      Port:
+      IpProtocol: tcp
+      FromPort:
         Ref: ApplicationPort
-      HealthCheckPath: /api/v1/screenings
-      TargetGroupAttributes:
-        - Key: deregistration_delay.timeout_seconds
-          Value: 60
+      ToPort:
+        Ref: ApplicationPort
+      GroupId:
+        Fn::Sub: ${ApplicationCluster.SecurityGroup}
+      SourceSecurityGroupId:
+        Fn::Sub: ${ApplicationFrontEnd.SecurityGroup}
+  ApplicationFrontEndToApplicationEgress:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      IpProtocol: tcp
+      FromPort:
+        Ref: ApplicationPort
+      ToPort:
+        Ref: ApplicationPort
+      GroupId:
+        Fn::Sub: ${ApplicationFrontEnd.SecurityGroup}
+      DestinationSecurityGroupId:
+        Fn::Sub: ${ApplicationCluster.SecurityGroup}
   ApplicationCluster:
     Type: Stack::Transform
     Template: asg.yml.j2
@@ -186,95 +197,92 @@ Resources:
       ProxyUrl:
         Fn::ImportValue: DefaultProxyURL
       VpcName: Default
-  ApplicationFrontEndToApplicationIngress:
-    Type: AWS::EC2::SecurityGroupIngress
-    Properties:
-      IpProtocol: tcp
-      FromPort:
-        Ref: ApplicationPort
-      ToPort:
-        Ref: ApplicationPort
-      GroupId:
-        Ref: ApplicationClusterSecurityGroup
-      SourceSecurityGroupId:
-        Ref: ApplicationFrontEndSecurityGroup
-  ApplicationFrontEndToApplicationEgress:
-    Type: AWS::EC2::SecurityGroupEgress
-    Properties:
-      IpProtocol: tcp
-      FromPort:
-        Ref: ApplicationPort
-      ToPort:
-        Ref: ApplicationPort
-      GroupId:
-        Ref: ApplicationFrontEndSecurityGroup
-      DestinationSecurityGroupId:
-        Ref: ApplicationClusterSecurityGroup
   ApplicationToElasticsearchFrontEndIngress:
     Type: AWS::EC2::SecurityGroupIngress
     Properties:
       IpProtocol: tcp
       FromPort:
-        Ref: ElasticsearchFrontEndPort
+        Ref: ElasticsearchPort
       ToPort:
-        Ref: ElasticsearchFrontEndPort
+        Ref: ElasticsearchPort
       GroupId:
-        Ref: ElasticsearchFrontEndSecurityGroup
+        Fn::Sub: ${ElasticsearchFrontEnd.SecurityGroup}
       SourceSecurityGroupId:
-        Ref: ApplicationClusterSecurityGroup        
+        Fn::Sub: ${ApplicationCluster.SecurityGroup}  
   ApplicationToElasticsearchFrontEndEgress:
     Type: AWS::EC2::SecurityGroupEgress
     Properties:
       IpProtocol: tcp
       FromPort:
-        Ref: ElasticsearchFrontEndPort
+        Ref: ElasticsearchPort
       ToPort:
-        Ref: ElasticsearchFrontEndPort
+        Ref: ElasticsearchPort
       GroupId:
-        Ref: ApplicationClusterSecurityGroup
+        Fn::Sub: ${ApplicationCluster.SecurityGroup}
       DestinationSecurityGroupId:
-        Ref: ElasticsearchFrontEndSecurityGroup
+        Fn::Sub: ${ElasticsearchFrontEnd.SecurityGroup}
+  ApplicationClusterToApplicationDatabaseIngressTcp5432:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      IpProtocol: tcp
+      FromPort: 5432
+      ToPort: 5432
+      GroupId:
+        Fn::Sub: ${ApplicationDatabase.SecurityGroup}
+      SourceSecurityGroupId: 
+        Fn::Sub: ${ApplicationCluster.SecurityGroup}
+  ApplicationClusterToApplicationDatabaseEgressTcp5432:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      IpProtocol: tcp
+      FromPort: 5432
+      ToPort: 5432
+      GroupId:
+        Fn::Sub: ${ApplicationCluster.SecurityGroup}
+      DestinationSecurityGroupId:
+        Fn::Sub: ${ApplicationDatabase.SecurityGroup}
+
+  # Elasticsearch resources
   ElasticsearchFrontEnd:
     Type: Stack::Transform
     Template: alb.yml.j2
     Properties:
       Name: ElasticsearchFrontEnd
-      DefaultTargetGroup:
-        Ref: ElasticsearchServiceTargetGroup
+      ConnectionDrainTimeout: 60
       DnsHostname:
         Ref: ElasticsearchHostname
       DnsDomain:
         Fn::ImportValue: DefaultVpcDomain
       HttpPort:
-        Ref: ElasticsearchFrontEndPort
+        Ref: ElasticsearchPort
       Scheme: internal
       Subnets: High
-  ElasticsearchServiceTargetGroup:
-    Type: "AWS::ElasticLoadBalancingV2::TargetGroup"
-    Properties:
-      VpcId:
-        Fn::ImportValue: "DefaultVpcId"
-      Protocol: "HTTP"
-      Port: { "Ref": "ElasticsearchPort" }
-      TargetGroupAttributes:
-        - Key: "deregistration_delay.timeout_seconds"
-          Value: 60
+      TargetGroupPort:
+        Ref: ElasticsearchPort
   ElasticsearchFrontEndToElasticsearchIngress:
-    Type: "AWS::EC2::SecurityGroupIngress"
+    Type: AWS::EC2::SecurityGroupIngress
     Properties:
-      IpProtocol: "tcp"
-      FromPort: { "Ref": "ElasticsearchPort" }
-      ToPort: { "Ref": "ElasticsearchPort" }
-      GroupId: { "Ref": "ElasticsearchClusterSecurityGroup" }
-      SourceSecurityGroupId: { "Ref": "ElasticsearchFrontEndSecurityGroup" }
+      IpProtocol: tcp
+      FromPort:
+        Ref: ElasticsearchPort
+      ToPort:
+        Ref: ElasticsearchPort
+      GroupId:
+        Fn::Sub: ${ElasticsearchCluster.SecurityGroup}
+      SourceSecurityGroupId:
+        Fn::Sub: ${ElasticsearchFrontEnd.SecurityGroup}
   ElasticsearchFrontEndToElasticsearchEgress:
-    Type: "AWS::EC2::SecurityGroupEgress"
+    Type: AWS::EC2::SecurityGroupEgress
     Properties:
-      IpProtocol: "tcp"
-      FromPort: { "Ref": "ElasticsearchPort" }
-      ToPort: { "Ref": "ElasticsearchPort" }
-      GroupId: { "Ref": "ElasticsearchFrontEndSecurityGroup" }
-      DestinationSecurityGroupId: { "Ref": "ElasticsearchClusterSecurityGroup" }
+      IpProtocol: tcp
+      FromPort:
+        Ref: ElasticsearchPort
+      ToPort:
+        Ref: ElasticsearchPort
+      GroupId:
+        Fn::Sub: ${ElasticsearchFrontEnd.SecurityGroup}
+      DestinationSecurityGroupId:
+        Fn::Sub: ${ElasticsearchCluster.SecurityGroup}
   ElasticsearchCluster:
     Type: Stack::Transform
     Template: asg.yml.j2
@@ -312,26 +320,8 @@ Resources:
         Fn::Sub: ${DbPasswordDecrypt.Plaintext}
       MultiAz:
         Ref: DbMultiAz
-  ApplicationClusterToApplicationDatabaseIngressTcp5432:
-    Type: AWS::EC2::SecurityGroupIngress
-    Properties:
-      IpProtocol: tcp
-      FromPort: 5432
-      ToPort: 5432
-      GroupId:
-        Ref: ApplicationDatabaseSecurityGroup
-      SourceSecurityGroupId: 
-        Ref: ApplicationClusterSecurityGroup
-  ApplicationClusterToApplicationDatabaseEgressTcp5432:
-    Type: AWS::EC2::SecurityGroupEgress
-    Properties:
-      IpProtocol: tcp
-      FromPort: 5432
-      ToPort: 5432
-      GroupId:
-        Ref: ApplicationClusterSecurityGroup
-      DestinationSecurityGroupId:
-        Ref: ApplicationDatabaseSecurityGroup
+
+  # Intake API ECS resources
   ApplicationTaskDefinition:
     Type: AWS::ECS::TaskDefinition
     Properties:
@@ -499,7 +489,7 @@ Resources:
   IntakeApiService:
     Type: AWS::ECS::Service
     DependsOn:
-      - ApplicationFrontEndLoadBalancerHttpsListener
+      - ApplicationFrontEndHttpsListener
       - ApplicationClusterAutoscalingGroup
       - IntakeApiServiceLogGroup
       - IntakeApiNginxLogGroup
@@ -526,7 +516,7 @@ Resources:
           ContainerPort:
             Ref: ApplicationPort
           TargetGroupArn:
-            Ref: IntakeApiServiceTargetGroup
+            Fn::Sub: ${ApplicationFrontEnd.TargetGroup}
       Role:
         Ref: EcsServiceRole
   EcsServiceRole:
@@ -596,7 +586,7 @@ Resources:
           ContainerPort:
             Ref: ElasticsearchPort
           TargetGroupArn:
-            Ref: ElasticsearchServiceTargetGroup
+            Ref: ElasticsearchFrontEndTargetGroup
       Role:
         Ref: EcsServiceRole
   DbCreateTask:

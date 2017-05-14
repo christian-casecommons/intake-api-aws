@@ -3,6 +3,9 @@ AWSTemplateFormatVersion: "2010-09-09"
 Description: Application Load Balancer Stack
 
 Parameters:
+  Name:
+    Type: String
+    Description: Name of load balancer
   AzCount:
     Type: Number
     Description: Number of AZs to deploy
@@ -10,34 +13,22 @@ Parameters:
     AllowedValues:
       - 2
       - 3
-  ConnectionIdleTimeout:
-    Type: Number
-    Description: Connection idle timeout in seconds
-    Default: 30
-  CloudwatchAlarms:
-    Type: String
-    Description: ARN of SNS topic for CloudWatch Alarms
-    Default: ""
-  DefaultTargetGroup:
-    Type: String
-    Description: ARN of default target group
-  DeleteProtectionEnabled:
-    Type: String
-    Description: Enables or disables delete protection
-    Default: "false"
-    AllowedValues:
-      - "true"
-      - "false"
-  DnsHostname:
-    Type: String
-    Description: Hostname portion of FQDN of load balancer
-  DnsDomain:
-    Type: String
-    Description: Domain portion of FQDN of load balancer
   Certificate:
     Type: String
     Description: CloudFormation export that defines certificate ARN
     Default: ""
+  CloudwatchAlarms:
+    Type: String
+    Description: ARN of SNS topic for CloudWatch Alarms
+    Default: ""
+  ConnectionDrainTimeout:
+    Type: Number
+    Description: Maximum time to drain connections
+    Default: 300
+  ConnectionIdleTimeout:
+    Type: Number
+    Description: Connection idle timeout in seconds
+    Default: 30
   CustomSecurityGroup:
     Type: String
     Description: Custom load balancer security group Id to attach to load balancer
@@ -51,16 +42,23 @@ Parameters:
       - "false"
       - "True"
       - "true"
-  Name:
+  DeleteProtectionEnabled:
     Type: String
-    Description: Name of load balancer
-    Default: ApplicationLoadBalancer
-  Scheme:
-    Type: String
-    Description: Load balancer scheme
+    Description: Enables or disables delete protection
+    Default: "false"
     AllowedValues:
-      - internet-facing
-      - internal
+      - "true"
+      - "false"
+  DnsHostname:
+    Type: String
+    Description: Hostname portion of FQDN of load balancer
+  DnsDomain:
+    Type: String
+    Description: Domain portion of FQDN of load balancer
+  HealthCheckPath:
+    Type: String
+    Description: Health check path of target group application
+    Default: /
   HttpPort:
     Type: Number
     Description: Load balancer HTTP listener port
@@ -69,6 +67,21 @@ Parameters:
     Type: Number
     Description: Load balancer HTTPS listener port
     Default: 0
+  LoadBalancerMetrics:
+    Type: String
+    Description: Set to true to create load balancer metrics
+    Default: "False"
+    AllowedValues:
+      - "True"
+      - "true"
+      - "False"
+      - "false"
+  Scheme:
+    Type: String
+    Description: Load balancer scheme
+    AllowedValues:
+      - internet-facing
+      - internal
   Subnets:
     Type: String
     Description: Subnet the load balancer instances will be deployed to
@@ -77,6 +90,16 @@ Parameters:
       - High
       - Management
       - Public
+  TargetGroupPort:
+    Type: Number
+    Description: Default target group backend port
+  TargetGroupProtocol:
+    Type: String
+    Description: Default target group backend protocol
+    Default: HTTP
+    AllowedValues:
+      - HTTP
+      - HTTPS
   VpcName:
     Type: String
     Description: CloudFormation export prefix that defines the target VPC
@@ -91,6 +114,11 @@ Conditions:
       - Fn::Equals:
         - Ref: CustomSecurityGroupEnabled
         - "true"
+  CloudwatchAlarmsTopicExists:
+    Fn::Not:
+      - Fn::Equals:
+        - Ref: CloudwatchAlarms
+        - ""
   HttpEnabled:
     Fn::Not:
       - Fn::Equals:
@@ -101,11 +129,14 @@ Conditions:
       - Fn::Equals:
         - Ref: HttpsPort
         - 0
-  CloudwatchAlarmsTopicExists:
-    Fn::Not:
+  LoadBalancerMetricsEnabled:
+    Fn::Or:
       - Fn::Equals:
-        - Ref: CloudwatchAlarms
-        - ""
+        - Ref: LoadBalancerMetrics
+        - "True"
+      - Fn::Equals:
+        - Ref: LoadBalancerMetrics
+        - "true"
   ThreeAzCondition:
     Fn::Equals:
       - Ref: AzCount
@@ -190,26 +221,26 @@ Resources:
         - Key: Name
           Value:
             Fn::Sub: ${AWS::StackName}-${Name}-sg
-  LoadBalancerHttpListener:
+  HttpListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Condition: HttpEnabled
     Properties:
       DefaultActions:
         - TargetGroupArn:
-            Ref: DefaultTargetGroup
+            Ref: TargetGroup
           Type: forward
       LoadBalancerArn:
         Ref: LoadBalancer
       Port:
         Ref: HttpPort
       Protocol: HTTP
-  LoadBalancerHttpsListener:
+  HttpsListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Condition: HttpsEnabled
     Properties:
       DefaultActions:
         - TargetGroupArn:
-            Ref: DefaultTargetGroup
+            Ref: TargetGroup
           Type: forward
       LoadBalancerArn:
         Ref: LoadBalancer
@@ -219,8 +250,25 @@ Resources:
       Certificates:
         - CertificateArn:
             Ref: Certificate
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      VpcId:
+        Fn::ImportValue:
+          Fn::Sub: ${VpcName}VpcId
+      Protocol:
+        Ref: TargetGroupProtocol
+      Port:
+        Ref: TargetGroupPort
+      HealthCheckPath:
+        Ref: HealthCheckPath
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value:
+            Ref: ConnectionDrainTimeout
   LoadBalancerTargetResponseTime:
     Type: AWS::CloudWatch::Alarm
+    Condition: LoadBalancerMetricsEnabled
     DependsOn:
       - LoadBalancer
     Properties:
@@ -243,6 +291,7 @@ Resources:
             Fn::Sub: ${LoadBalancer.LoadBalancerFullName}
   LoadBalancerUnHealthyHostCount:
     Type: "AWS::CloudWatch::Alarm"
+    Condition: LoadBalancerMetricsEnabled
     DependsOn:
       - LoadBalancer
     Properties:
@@ -265,6 +314,7 @@ Resources:
             Fn::Sub: ${LoadBalancer.LoadBalancerFullName}
   LoadBalancerHTTPCodeELB5XX:
     Type: "AWS::CloudWatch::Alarm"
+    Condition: LoadBalancerMetricsEnabled
     DependsOn:
       - LoadBalancer
     Properties:
@@ -287,6 +337,7 @@ Resources:
             Fn::Sub: ${LoadBalancer.LoadBalancerFullName}
   LoadBalancerRejectedConnectionCount:
     Type: "AWS::CloudWatch::Alarm"
+    Condition: LoadBalancerMetricsEnabled
     DependsOn:
       - LoadBalancer
     Properties:
@@ -307,6 +358,106 @@ Resources:
         - Name: LoadBalancer
           Value:
             Fn::Sub: ${LoadBalancer.LoadBalancerFullName}
+  TargetGroupTargetResponseTime:
+    Type: AWS::CloudWatch::Alarm
+    DependsOn:
+      - LoadBalancer
+    Properties:
+      AlarmDescription: alb latency check
+      MetricName: TargetResponseTime
+      Namespace: AWS/ApplicationELB
+      Statistic: Average
+      Period: 60
+      EvaluationPeriods: 5
+      Threshold: 2
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      Dimensions:
+        - Name: LoadBalancer
+          Value:
+            Fn::Sub: ${LoadBalancer.LoadBalancerFullName}
+        - Name: TargetGroup
+          Value:
+            Fn::Sub: ${TargetGroup.TargetGroupFullName}
+  TargetGroupUnHealthyHostCount:
+    Type: "AWS::CloudWatch::Alarm"
+    DependsOn:
+      - LoadBalancer
+    Properties:
+      AlarmDescription: alb unhealthy host check
+      MetricName: UnHealthyHostCount
+      Namespace: AWS/ApplicationELB
+      Statistic: Minimum
+      Period: 60
+      EvaluationPeriods: 10
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      Dimensions:
+        - Name: LoadBalancer
+          Value:
+            Fn::Sub: ${LoadBalancer.LoadBalancerFullName}
+        - Name: TargetGroup
+          Value:
+            Fn::Sub: ${TargetGroup.TargetGroupFullName}
+  TargetGroupHTTPCodeELB5XX:
+    Type: "AWS::CloudWatch::Alarm"
+    DependsOn:
+      - LoadBalancer
+    Properties:
+      AlarmDescription: alb HTTP 5XX code check
+      MetricName: HTTPCode_ELB_5XX_Count
+      Namespace: AWS/ApplicationELB
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: 5
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      Dimensions:
+        - Name: LoadBalancer
+          Value:
+            Fn::Sub: ${LoadBalancer.LoadBalancerFullName}
+        - Name: TargetGroup
+          Value:
+            Fn::Sub: ${TargetGroup.TargetGroupFullName}
+  TargetGroupRejectedConnectionCount:
+    Type: "AWS::CloudWatch::Alarm"
+    DependsOn:
+      - LoadBalancer
+    Properties:
+      AlarmDescription: alb rejected connection count check
+      MetricName: RejectedConnectionCount
+      Namespace: AWS/ApplicationELB
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: 10
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      Dimensions:
+        - Name: LoadBalancer
+          Value:
+            Fn::Sub: ${LoadBalancer.LoadBalancerFullName}
+        - Name: TargetGroup
+          Value:
+            Fn::Sub: ${TargetGroup.TargetGroupFullName}
 Outputs:
   DnsRecord:
     Description: Load Balancer DNS Record
@@ -317,15 +468,19 @@ Outputs:
     Value:
       Ref: LoadBalancer
   HttpListener:
-    Description: HTTP Listener
+    Description: HTTP Listener ARN
     Condition: HttpEnabled
     Value:
-      Ref: LoadBalancerHttpListener
+      Ref: HttpListener
   HttpsListener:
-    Description: HTTPS Listener
+    Description: HTTPS Listener ARN
     Condition: HttpsEnabled
     Value:
-      Ref: LoadBalancerHttpsListener
+      Ref: HttpsListener
+  TargetGroup:
+    Description: Default Target Group ARN
+    Value: 
+      Ref: TargetGroup
   SecurityGroup: 
     Description: Load Balancer Security Group
     Value:
