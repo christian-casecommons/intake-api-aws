@@ -458,7 +458,7 @@ Resources:
             Value: production
           - Name: PG_HOST
             Value:
-              Fn::Sub: ${ApplicationDatabaseDbInstance.Endpoint.Address}
+              Fn::Sub: ${ApplicationDatabase.EndPoint}
           - Name: DATABASE_NAME
             Value:
               Ref: DbName
@@ -733,3 +733,10 @@ Resources:
       Name: CustomResources
       KMSDecrypterVersion:
         Ref: KMSDecrypterVersion
+
+Mappings:
+  RegionAndInstanceTypeToAMIID: 
+      us-east-1: 
+        test: 
+          - x
+          - u
