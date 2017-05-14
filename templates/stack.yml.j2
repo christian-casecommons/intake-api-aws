@@ -147,7 +147,7 @@ Resources:
       TargetGroupPort:
         Ref: ApplicationPort
   ApplicationFrontEndCustomSecurityGroup:
-    Type: "AWS::EC2::SecurityGroup"
+    Type: AWS::EC2::SecurityGroup
     Properties:
       VpcId:
         Fn::ImportValue: DefaultVpcId
