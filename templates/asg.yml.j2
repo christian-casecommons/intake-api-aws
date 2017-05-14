@@ -91,6 +91,26 @@ Parameters:
     Default: "Default"
 
 Conditions:
+  T2InstanceType:
+    Fn::Or:
+      - Fn::Equals:
+          - Ref: InstanceType
+          - t2.nano
+      - Fn::Equals:
+          - Ref: InstanceType
+          - t2.micro
+      - Fn::Equals:
+          - Ref: InstanceType
+          - t2.small
+      - Fn::Equals:
+          - Ref: InstanceType
+          - t2.medium
+      - Fn::Equals:
+          - Ref: InstanceType
+          - t2.large
+      - Fn::Equals:
+          - Ref: InstanceType
+          - t2.xlarge
   ThreeAzCondition:
     Fn::Equals:
       - Ref: AzCount
@@ -450,6 +470,7 @@ Resources:
     Type: AWS::ECS::Cluster
   CPUCreditBalance:
     Type: AWS::CloudWatch::Alarm
+    Condition: T2InstanceType
     DependsOn:
       - AutoscalingGroup
     Properties:
@@ -478,7 +499,7 @@ Resources:
         - Ref: CloudwatchAlarms
         - Ref: AWS::NoValue
       Dimensions:
-        - Name: Name
+        - Name: AutoScalingGroupName
           Value:
             Ref: AutoscalingGroup
   CPUUtilization:
@@ -511,7 +532,7 @@ Resources:
         - Ref: CloudwatchAlarms
         - Ref: AWS::NoValue
       Dimensions:
-        - Name: Name
+        - Name: AutoScalingGroupName
           Value:
             Ref: AutoscalingGroup
   StatusCheck:
@@ -543,7 +564,7 @@ Resources:
         - Ref: CloudwatchAlarms
         - Ref: AWS::NoValue
       Dimensions:
-        - Name: Name
+        - Name: AutoScalingGroupName
           Value:
             Ref: AutoscalingGroup
   # LifecycleHookRole:
