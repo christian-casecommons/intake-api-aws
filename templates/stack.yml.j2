@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: "2010-09-09"
 
-Description: Intake API - {{ env }}
+Description: Intake API
 
 Parameters:
   ApplicationImageId:
@@ -128,13 +128,11 @@ Resources:
     Template: alb.yml.j2
     Properties:
       Name: ApplicationFrontEnd
+      AllowedCidr: 0.0.0.0/0
       Certificate:
         Fn::ImportValue: 
           Ref: ApplicationFrontEndCertificateArn
       ConnectionDrainTimeout: 60
-      CustomSecurityGroup:
-        Ref: ApplicationFrontEndCustomSecurityGroup
-      CustomSecurityGroupEnabled: "true"
       DnsHostname:
         Ref: ApplicationHostname
       DnsDomain:
@@ -146,42 +144,7 @@ Resources:
       Subnets: Public
       TargetGroupPort:
         Ref: ApplicationPort
-  ApplicationFrontEndCustomSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      VpcId:
-        Fn::ImportValue: DefaultVpcId
-      GroupDescription: Intake API Load Balancer Security Group
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort:
-            Ref: ApplicationFrontEndPort
-          ToPort:
-            Ref: ApplicationFrontEndPort
-          CidrIp: 0.0.0.0/0
-  ApplicationFrontEndToApplicationIngress:
-    Type: AWS::EC2::SecurityGroupIngress
-    Properties:
-      IpProtocol: tcp
-      FromPort:
-        Ref: ApplicationPort
-      ToPort:
-        Ref: ApplicationPort
-      GroupId:
-        Fn::Sub: ${ApplicationCluster.SecurityGroup}
-      SourceSecurityGroupId:
-        Fn::Sub: ${ApplicationFrontEnd.SecurityGroup}
-  ApplicationFrontEndToApplicationEgress:
-    Type: AWS::EC2::SecurityGroupEgress
-    Properties:
-      IpProtocol: tcp
-      FromPort:
-        Ref: ApplicationPort
-      ToPort:
-        Ref: ApplicationPort
-      GroupId:
-        Fn::Sub: ${ApplicationFrontEnd.SecurityGroup}
-      DestinationSecurityGroupId:
+      TargetSecurityGroup:
         Fn::Sub: ${ApplicationCluster.SecurityGroup}
   ApplicationCluster:
     Type: Stack::Transform
@@ -263,30 +226,8 @@ Resources:
       Subnets: High
       TargetGroupPort:
         Ref: ElasticsearchPort
-  ElasticsearchFrontEndToElasticsearchIngress:
-    Type: AWS::EC2::SecurityGroupIngress
-    Properties:
-      IpProtocol: tcp
-      FromPort:
-        Ref: ElasticsearchPort
-      ToPort:
-        Ref: ElasticsearchPort
-      GroupId:
-        Fn::Sub: ${ElasticsearchCluster.SecurityGroup}
-      SourceSecurityGroupId:
-        Fn::Sub: ${ElasticsearchFrontEnd.SecurityGroup}
-  ElasticsearchFrontEndToElasticsearchEgress:
-    Type: AWS::EC2::SecurityGroupEgress
-    Properties:
-      IpProtocol: tcp
-      FromPort:
-        Ref: ElasticsearchPort
-      ToPort:
-        Ref: ElasticsearchPort
-      GroupId:
-        Fn::Sub: ${ElasticsearchFrontEnd.SecurityGroup}
-      DestinationSecurityGroupId:
-        Fn::Sub: ${ElasticsearchCluster.SecurityGroup}
+      TargetSecurityGroup:
+        Ref: ElasticsearchClusterSecurityGroup
   ElasticsearchCluster:
     Type: Stack::Transform
     Template: asg.yml.j2
@@ -726,6 +667,8 @@ Resources:
         Fn::Sub: ${CustomResources.KMSDecrypter}
       Ciphertext:
         Ref: DbPassword
+
+  # Custom resources
   CustomResources:
     Type: Stack::Transform
     Template: custom.yml.j2
@@ -733,10 +676,3 @@ Resources:
       Name: CustomResources
       KMSDecrypterVersion:
         Ref: KMSDecrypterVersion
-
-Mappings:
-  RegionAndInstanceTypeToAMIID: 
-      us-east-1: 
-        test: 
-          - x
-          - u
