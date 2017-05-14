@@ -3,6 +3,7 @@ Sts.Role: arn:aws:iam::429614120872:role/remoteAdmin
 
 # Stack settings
 Stack.Name: intake-api-dev
+Stack.Description: Intake API - Development
 
 # Global overrides for all resources of the given type
 AWS::Logs::LogGroup:
