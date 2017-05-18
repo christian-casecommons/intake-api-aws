@@ -15,6 +15,8 @@ Stack.Inputs.ApplicationPort: 3000
 Stack.Inputs.ApplicationSecretKey: AQECAHgohc0dbuzR1L3lEdEkDC96PMYUEV9nITogJU2vbocgQAAAAIswgYgGCSqGSIb3DQEHBqB7MHkCAQAwdAYJKoZIhvcNAQcBMB4GCWCGSAFlAwQBLjARBAxmShgWJUrvG2uXdzkCARCAR3LpbhDDkVi6Rkz6mo+yD4QKeT71vT4HDA+yFdW4Ig9iJSd761OyGA1Q2kxfl1vnF+pbdYq3LiNptFEFttJsd/drMJ5I6vzo
 Stack.Inputs.ApplicationHostname: dev-intake-api
 Stack.Inputs.ApplicationDomain: ca.mycasebook.org
+Stack.Inputs.ApplicationAuthentication: "false"
+Stack.Inputs.ApplicationAuthenticationUrl: http://perry.intake.cwds.tabordasolutions.net
 
 # Nginx settings
 Stack.Inputs.NginxDockerImage: 429614120872.dkr.ecr.us-west-2.amazonaws.com/cwds/nginx

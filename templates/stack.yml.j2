@@ -41,6 +41,13 @@ Parameters:
   ApplicationSecretKey:
     Type: String
     Description: KMS Encrypted Secret Key Base
+  ApplicationAuthenticationUrl:
+    Type: String
+    Description: Authentication URL to validate token
+  ApplicationAuthentication:
+    Type: String
+    Description: Enables or disables authentication
+    Default: "true"
   ElasticsearchImageId:
     Type: String
     Description: Elasticsearch Amazon Machine Image ID
@@ -707,6 +714,10 @@ Resources:
             Value: { "Ref": "DbName" }
           - Name: PG_USER
             Value: { "Ref": "DbUsername" }
+          - Name: AUTHENTICATION
+            Value: { "Ref": "ApplicationAuthentication" }
+          - Name: AUTHENTICATION_URL
+            Value: { "Ref": "ApplicationAuthenticationUrl" }
           - Name: KMS_PG_PASSWORD
             Value: { "Ref": "DbPassword" }
           - Name: KMS_SECRET_KEY_BASE
@@ -806,6 +817,10 @@ Resources:
             Value: { "Ref": "DbName" }
           - Name: PG_USER
             Value: { "Ref": "DbUsername" }
+          - Name: AUTHENTICATION
+            Value: { "Ref": "ApplicationAuthentication" }
+          - Name: AUTHENTICATION_URL
+            Value: { "Ref": "ApplicationAuthenticationUrl" }
           - Name: KMS_PG_PASSWORD
             Value: { "Ref": "DbPassword" }
           - Name: ELASTICSEARCH_URL
