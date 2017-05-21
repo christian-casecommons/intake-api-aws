@@ -160,7 +160,6 @@ Resources:
       KeyName:
         Ref: ApplicationKeyName
       Subnets: Medium
-      ProxyEnabled: "True"
       ProxyUrl:
         Fn::ImportValue: DefaultProxyURL
       VpcName: Default
@@ -207,7 +206,7 @@ Resources:
       TargetGroupPort:
         Ref: ElasticsearchPort
       TargetSecurityGroup:
-        Ref: ElasticsearchClusterSecurityGroup
+        Fn::Sub: ${ElasticsearchCluster.SecurityGroup}
   ElasticsearchCluster:
     Type: Stack::Transform
     Template: asg.yml.j2
@@ -222,7 +221,6 @@ Resources:
       KeyName:
         Ref: ElasticsearchKeyName
       Subnets: High
-      ProxyEnabled: "True"
       ProxyUrl:
         Fn::ImportValue: DefaultProxyURL
       VpcName: Default
@@ -442,8 +440,8 @@ Resources:
   IntakeApiService:
     Type: AWS::ECS::Service
     DependsOn:
-      - ApplicationFrontEndHttpsListener
-      - ApplicationClusterAutoscalingGroup
+      - ApplicationFrontEnd
+      - ApplicationCluster
       - IntakeApiServiceLogGroup
       - IntakeApiNginxLogGroup
       - DbCreateTask
@@ -535,7 +533,7 @@ Resources:
           ContainerPort:
             Ref: ElasticsearchPort
           TargetGroupArn:
-            Ref: ElasticsearchFrontEndTargetGroup
+            Fn::Sub: ${ElasticsearchFrontEnd.TargetGroup}
       Role:
         Ref: EcsServiceRole
 
@@ -543,11 +541,11 @@ Resources:
   DbCreateTask:
     Type: Custom::ECSTask
     DependsOn:
-      - ApplicationClusterAutoscalingGroup
-      - ApplicationDatabaseDbInstance
+      - ApplicationCluster
+      - ApplicationDatabase
     Properties:
       ServiceToken:
-        Fn::Sub: ${ApplicationCluster.EcsTaskRunner}
+        Fn::Sub: ${ApplicationCluster.EcsTaskRunner.Arn}
       Cluster:
         Ref: ApplicationClusterEcsCluster
       TaskDefinition:
@@ -567,7 +565,7 @@ Resources:
       - DbCreateTask
     Properties:
       ServiceToken:
-        Fn::Sub: ${ApplicationCluster.EcsTaskRunner}
+        Fn::Sub: ${ApplicationCluster.EcsTaskRunner.Arn}
       Cluster:
         Ref: ApplicationClusterEcsCluster
       TaskDefinition:
@@ -588,7 +586,7 @@ Resources:
       - ElasticsearchService
     Properties:
       ServiceToken:
-        Fn::Sub: ${ApplicationCluster.EcsTaskRunner}
+        Fn::Sub: ${ApplicationCluster.EcsTaskRunner.Arn}
       Cluster:
         Ref: ApplicationClusterEcsCluster
       TaskDefinition:
@@ -608,7 +606,7 @@ Resources:
       - SearchMigrateTask
     Properties:
       ServiceToken:
-        Fn::Sub: ${ApplicationCluster.EcsTaskRunner}
+        Fn::Sub: ${ApplicationCluster.EcsTaskRunner.Arn}
       Cluster:
         Ref: ApplicationClusterEcsCluster
       TaskDefinition:
