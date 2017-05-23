@@ -132,15 +132,15 @@ Resources:
   ApplicationDnsRecord:
     Type: "AWS::Route53::RecordSet"
     Properties:
-      Name: 
+      Name:
         Fn::Sub: "${ApplicationHostname}.${ApplicationDomain}"
       TTL: "300"
-      HostedZoneName: 
+      HostedZoneName:
         Fn::Sub: "${ApplicationDomain}."
       Type: "CNAME"
-      Comment: 
+      Comment:
         Fn::Sub: "Intake API Application - ${AWS::StackName}"
-      ResourceRecords: 
+      ResourceRecords:
         - Fn::Sub: "${ApplicationLoadBalancer.DNSName}"
   ApplicationLoadBalancer:
     Type: "AWS::ElasticLoadBalancingV2::LoadBalancer"
@@ -151,7 +151,7 @@ Resources:
       Subnets:
         - Fn::ImportValue: DefaultPublicSubnetA
         - Fn::ImportValue: DefaultPublicSubnetB
-      LoadBalancerAttributes: 
+      LoadBalancerAttributes:
         - Key: "deletion_protection.enabled"
           Value: false
         - Key: "idle_timeout.timeout_seconds"
@@ -261,7 +261,7 @@ Resources:
               cwd: "/home/ec2-user/"
           files:
             /etc/ecs/ecs.config:
-              content: 
+              content:
                 Fn::Sub: "ECS_CLUSTER=${ApplicationCluster}\n"
     Properties:
       ImageId: { "Ref": "ApplicationImageId" }
@@ -270,19 +270,19 @@ Resources:
       KeyName: { "Ref": "ApplicationKeyName" }
       SecurityGroups:
         - Ref: "ApplicationAutoscalingSecurityGroup"
-      UserData: 
+      UserData:
         Fn::Base64:
           Fn::Join: ["\n", [
             "#!/bin/bash",
             "set -e",
             "Fn::Join": ["", [
               "Fn::Sub": "/opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource ApplicationAutoscalingLaunchConfiguration --region ${AWS::Region}",
-              "    --http-proxy ", "Fn::ImportValue": "DefaultProxyURL", 
+              "    --http-proxy ", "Fn::ImportValue": "DefaultProxyURL",
               "    --https-proxy ", "Fn::ImportValue": "DefaultProxyURL"
             ] ],
             "Fn::Join": ["", [
               "Fn::Sub": "/opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource ApplicationAutoscaling --region ${AWS::Region}",
-              "    --http-proxy ", "Fn::ImportValue": "DefaultProxyURL", 
+              "    --http-proxy ", "Fn::ImportValue": "DefaultProxyURL",
               "    --https-proxy ", "Fn::ImportValue": "DefaultProxyURL"
             ] ]
           ] ]
@@ -1016,7 +1016,7 @@ Resources:
     Type: "AWS::Logs::LogGroup"
     DeletionPolicy: Delete
     Properties:
-      LogGroupName: 
+      LogGroupName:
         Fn::Sub: ${AWS::StackName}/ec2/ApplicationAutoscaling/var/log/dmesg
       RetentionInDays: { "Ref": "LogRetention" }
   DockerLogGroup:
@@ -1072,7 +1072,7 @@ Resources:
     Type: "AWS::Logs::LogGroup"
     DeletionPolicy: Delete
     Properties:
-      LogGroupName: 
+      LogGroupName:
         Fn::Sub: ${AWS::StackName}/ec2/ElasticsearchAutoscaling/var/log/dmesg
       RetentionInDays: { "Ref": "LogRetention" }
   ElasticsearchDockerLogGroup:
