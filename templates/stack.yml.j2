@@ -362,7 +362,7 @@ Resources:
                 Action:
                   - "ecs:RegisterContainerInstance"
                   - "ecs:DeregisterContainerInstance"
-                Resource: 
+                Resource:
                   Fn::Sub: "arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:cluster/${ApplicationCluster}"
               - Effect: "Allow"
                 Action:
@@ -372,7 +372,7 @@ Resources:
                   - "ecs:StartTelemetrySession"
                 Resource: "*"
               - Effect: "Allow"
-                Action: 
+                Action:
                   - "ecr:BatchCheckLayerAvailability"
                   - "ecr:BatchGetImage"
                   - "ecr:GetDownloadUrlForLayer"
@@ -401,9 +401,9 @@ Resources:
       HostedZoneName:
         Fn::ImportValue: DefaultVpcZone
       Type: "CNAME"
-      Comment: 
+      Comment:
         Fn::Sub: "Intake API Elasticsearch - ${AWS::StackName}"
-      ResourceRecords: 
+      ResourceRecords:
         - Fn::Sub: "${ElasticsearchLoadBalancer.DNSName}"
   ElasticsearchLoadBalancer:
     Type: "AWS::ElasticLoadBalancingV2::LoadBalancer"
@@ -414,7 +414,7 @@ Resources:
       Subnets:
         - Fn::ImportValue: DefaultHighSubnetA
         - Fn::ImportValue: DefaultHighSubnetB
-      LoadBalancerAttributes: 
+      LoadBalancerAttributes:
         - Key: "deletion_protection.enabled"
           Value: false
         - Key: "idle_timeout.timeout_seconds"
@@ -514,7 +514,7 @@ Resources:
               cwd: "/home/ec2-user/"
           files:
             /etc/ecs/ecs.config:
-              content: 
+              content:
                 Fn::Sub: "ECS_CLUSTER=${ElasticsearchCluster}\n"
     Properties:
       ImageId: { "Ref": "ElasticsearchImageId" }
@@ -523,19 +523,19 @@ Resources:
       KeyName: { "Ref": "ElasticsearchKeyName" }
       SecurityGroups:
         - Ref: "ElasticsearchAutoscalingSecurityGroup"
-      UserData: 
+      UserData:
         Fn::Base64:
           Fn::Join: ["\n", [
             "#!/bin/bash",
             "set -e",
             "Fn::Join": ["", [
               "Fn::Sub": "/opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource ElasticsearchAutoscalingLaunchConfiguration --region ${AWS::Region}",
-              "    --http-proxy ", "Fn::ImportValue": "DefaultProxyURL", 
+              "    --http-proxy ", "Fn::ImportValue": "DefaultProxyURL",
               "    --https-proxy ", "Fn::ImportValue": "DefaultProxyURL"
             ] ],
             "Fn::Join": ["", [
               "Fn::Sub": "/opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource ElasticsearchAutoscaling --region ${AWS::Region}",
-              "    --http-proxy ", "Fn::ImportValue": "DefaultProxyURL", 
+              "    --http-proxy ", "Fn::ImportValue": "DefaultProxyURL",
               "    --https-proxy ", "Fn::ImportValue": "DefaultProxyURL"
             ] ]
           ] ]
@@ -594,7 +594,7 @@ Resources:
                 Action:
                   - "ecs:RegisterContainerInstance"
                   - "ecs:DeregisterContainerInstance"
-                Resource: 
+                Resource:
                   Fn::Sub: "arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:cluster/${ElasticsearchCluster}"
               - Effect: "Allow"
                 Action:
@@ -604,7 +604,7 @@ Resources:
                   - "ecs:StartTelemetrySession"
                 Resource: "*"
               - Effect: "Allow"
-                Action: 
+                Action:
                   - "ecr:BatchCheckLayerAvailability"
                   - "ecr:BatchGetImage"
                   - "ecr:GetDownloadUrlForLayer"
@@ -635,7 +635,7 @@ Resources:
       VPCSecurityGroups:
         - { "Ref" : "ApplicationDatabaseSecurityGroup" }
       MultiAZ: { "Ref": "DbMultiAz" }
-      AvailabilityZone: 
+      AvailabilityZone:
         Fn::If:
           - "DbMultiAzCondition"
           - Ref: "AWS::NoValue"
@@ -647,7 +647,7 @@ Resources:
     Type: "AWS::RDS::DBSubnetGroup"
     Properties:
       DBSubnetGroupDescription: "{{ 'intake-api-' + env + '-ApplicationDatabase-db-subnet-group' }}"
-      SubnetIds: 
+      SubnetIds:
         - Fn::ImportValue: DefaultHighSubnetA
         - Fn::ImportValue: DefaultHighSubnetB
       Tags:
@@ -700,7 +700,7 @@ Resources:
         LogConfiguration:
           LogDriver: awslogs
           Options:
-            awslogs-group: 
+            awslogs-group:
               Fn::Sub: ${AWS::StackName}/ecs/IntakeApiService/intake-api
             awslogs-region: { "Ref": "AWS::Region" }
             awslogs-stream-prefix: docker
@@ -768,7 +768,7 @@ Resources:
         LogConfiguration:
           LogDriver: awslogs
           Options:
-            awslogs-group: 
+            awslogs-group:
               Fn::Sub: ${AWS::StackName}/ecs/IntakeApiService/nginx
             awslogs-region: { "Ref": "AWS::Region" }
             awslogs-stream-prefix: docker
@@ -776,14 +776,14 @@ Resources:
         - ContainerPort: { "Ref": "ApplicationPort" }
           Protocol: tcp
         Environment:
-          - Name: HTTP_PORT 
+          - Name: HTTP_PORT
             Value: { "Ref": "ApplicationPort" }
           - Name: WEB_ROOT
             Value: /intake_api_prototype/public
           - Name: UPSTREAM_URL
             Value: unix:///tmp/app.sock
           - Name: HEALTHCHECK
-            Value: 
+            Value:
               Fn::Sub: curl -fs localhost:${ApplicationPort}/api/v1/screenings
         MountPoints:
           - SourceVolume: webroot
@@ -803,7 +803,7 @@ Resources:
         LogConfiguration:
           LogDriver: awslogs
           Options:
-            awslogs-group: 
+            awslogs-group:
               Fn::Sub: ${AWS::StackName}/ecs/IntakeApiService/adhoc
             awslogs-region: { "Ref": "AWS::Region" }
             awslogs-stream-prefix: docker
@@ -882,7 +882,7 @@ Resources:
         Version: "2012-10-17"
         Statement:
           - Effect: "Allow"
-            Principal: 
+            Principal:
               Service: [ "ecs.amazonaws.com" ]
             Action: [ "sts:AssumeRole" ]
       Path: "/"
@@ -896,7 +896,7 @@ Resources:
       NetworkMode: host
       Volumes:
         - Name: esdata
-          Host: 
+          Host:
             SourcePath: /ecs/esdata
       ContainerDefinitions:
       - Name: elasticsearch
@@ -906,7 +906,7 @@ Resources:
         LogConfiguration:
           LogDriver: awslogs
           Options:
-            awslogs-group: 
+            awslogs-group:
               Fn::Sub: ${AWS::StackName}/ecs/ElasticsearchService/elasticsearch
             awslogs-region: { "Ref": "AWS::Region" }
             awslogs-stream-prefix: docker
@@ -1030,7 +1030,7 @@ Resources:
     Type: "AWS::Logs::LogGroup"
     DeletionPolicy: Delete
     Properties:
-      LogGroupName: 
+      LogGroupName:
         Fn::Sub: ${AWS::StackName}/ec2/ApplicationAutoscaling/var/log/ecs/ecs-agent
       RetentionInDays: { "Ref": "LogRetention" }
   EcsInitLogGroup:
@@ -1086,7 +1086,7 @@ Resources:
     Type: "AWS::Logs::LogGroup"
     DeletionPolicy: Delete
     Properties:
-      LogGroupName: 
+      LogGroupName:
         Fn::Sub: ${AWS::StackName}/ec2/ElasticsearchAutoscaling/var/log/ecs/ecs-agent
       RetentionInDays: { "Ref": "LogRetention" }
   ElasticsearchEcsInitLogGroup:
@@ -1113,7 +1113,7 @@ Resources:
   DbPasswordDecrypt:
     Type: "Custom::KMSDecrypt"
     Properties:
-      ServiceToken: 
+      ServiceToken:
         Fn::Sub: ${KMSDecrypter.Arn}
       Ciphertext: { "Ref": "DbPassword" }
   KMSDecrypterLogGroup:
@@ -1128,18 +1128,18 @@ Resources:
     DependsOn:
       - "KMSDecrypterLogGroup"
     Properties:
-      Description: 
+      Description:
         Fn::Sub: "${AWS::StackName} KMS Decrypter"
       Handler: "cfn_kms_decrypt.handler"
       MemorySize: 128
       Runtime: "python2.7"
       Timeout: 300
-      Role: 
+      Role:
         Fn::Sub: ${KMSDecrypterRole.Arn}
-      FunctionName: 
+      FunctionName:
         Fn::Sub: "${AWS::StackName}-cfnKmsDecrypt"
       Code:
-        S3Bucket: 
+        S3Bucket:
           Fn::Sub: "${AWS::AccountId}-cfn-lambda"
         S3Key: "cfnKmsDecrypt.zip"
         S3ObjectVersion: { "Ref": "LambdaCfnKmsDecryptVersion" }
@@ -1171,7 +1171,7 @@ Resources:
             - "logs:CreateLogStream"
             - "logs:DescribeLogStreams"
             - "logs:PutLogEvents"
-            Resource: 
+            Resource:
               Fn::Sub: "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${AWS::StackName}-cfnKmsDecrypt:*:*"
   EcsTaskRunnerLogGroup:
     Type: "AWS::Logs::LogGroup"
@@ -1185,20 +1185,20 @@ Resources:
     DependsOn:
       - "EcsTaskRunnerLogGroup"
     Properties:
-      Description: 
+      Description:
         Fn::Sub: "${AWS::StackName} ECS Task Runner"
       Handler: "ecs_tasks.handler"
       MemorySize: 128
       Runtime: "python2.7"
       Timeout: 300
-      Role: 
+      Role:
         Fn::Sub: ${EcsTaskRunnerRole.Arn}
-      FunctionName: 
+      FunctionName:
         Fn::Sub: "${AWS::StackName}-cfnEcsTasks"
       Code:
-        S3Bucket: 
+        S3Bucket:
           Fn::Sub: "${AWS::AccountId}-cfn-lambda"
-        S3Key: "cfnEcsTasks.zip"
+        S3Key: ecsTasks.zip
         S3ObjectVersion: { "Ref": "LambdaCfnEcsTasksVersion" }
   EcsTaskRunnerRole:
     Type: "AWS::IAM::Role"
@@ -1233,7 +1233,7 @@ Resources:
             Resource: "*"
             Condition:
               ArnEquals:
-                ecs:cluster: 
+                ecs:cluster:
                   Fn::Sub: "arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:cluster/${ApplicationCluster}"
           - Sid: "ManageLambdaLogs"
             Effect: "Allow"
@@ -1241,5 +1241,5 @@ Resources:
             - "logs:CreateLogStream"
             - "logs:DescribeLogStreams"
             - "logs:PutLogEvents"
-            Resource: 
+            Resource:
               Fn::Sub: "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${AWS::StackName}-cfnEcsTasks:*:*"

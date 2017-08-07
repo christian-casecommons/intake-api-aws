@@ -1,0 +1,60 @@
+# STS settings
+Sts.Role: arn:aws:iam::334274607422:role/admin
+Stack.Name: intake-api
+Sts.Region: us-east-1
+
+# Application settings
+Stack.Inputs.ApplicationKeyName: admin
+Stack.Inputs.ApplicationInstanceType: t2.micro
+Stack.Inputs.ApplicationDesiredCount: "2"
+Stack.Inputs.ApplicationImageId: ami-9e6d4ae5
+Stack.Inputs.ApplicationDockerImage: 334274607422.dkr.ecr.us-east-1.amazonaws.com/casecommons/intake-api
+Stack.Inputs.ApplicationDockerImageTag: latest
+Stack.Inputs.ApplicationLoadBalancerPort: "443"
+Stack.Inputs.ApplicationPort: "3000"
+Stack.Inputs.ApplicationSecretKey: AQICAHjd0+m+hAx7gz+jpQq4ecaZ0zpnuPyeR70biJmJv/nTfAFkTZB3FxRVErwcXZ6tMNquAAAAizCBiAYJKoZIhvcNAQcGoHsweQIBADB0BgkqhkiG9w0BBwEwHgYJYIZIAWUDBAEuMBEEDPiBFP+0kKGN8rICfwIBEIBHnbPqMHp+1rTqIA9WmBsytn8XsgUkgkgHHPjtQ7EDlGs/QoFJfxv43ZZ+XS7whiafB92elKsLYdcP7MzgBs9m/nbKvu8T30I=
+Stack.Inputs.ApplicationHostname: intake-api
+Stack.Inputs.ApplicationDomain: dev.casebookplatform.org
+Stack.Inputs.ApplicationAuthentication: "false"
+Stack.Inputs.ApplicationAuthenticationUrl: http://perry.intake.cwds.tabordasolutions.net
+
+# Nginx settings
+Stack.Inputs.NginxDockerImage: 334274607422.dkr.ecr.us-east-1.amazonaws.com/casecommons/nginx
+Stack.Inputs.NginxDockerImageTag: latest
+
+# Load balancer settings
+Stack.Inputs.ApplicationLoadBalancerCertificateArn: DevCasebookplatformOrgCertificateArn
+
+# Elasticsearch settings
+Stack.Inputs.ElasticsearchKeyName: admin
+Stack.Inputs.ElasticsearchInstanceType: t2.micro
+Stack.Inputs.ElasticsearchDesiredCount: "1"
+Stack.Inputs.ElasticsearchImageId: ami-9e6d4ae5
+Stack.Inputs.ElasticsearchDockerImage: 334274607422.dkr.ecr.us-east-1.amazonaws.com/casecommons/elasticsearch
+Stack.Inputs.ElasticsearchDockerImageTag: latest
+Stack.Inputs.ElasticsearchLoadBalancerPort: "9200"
+Stack.Inputs.ElasticsearchPort: "9200"
+Stack.Inputs.ElasticsearchHostname: intake-api-es
+
+# Database settings
+Stack.Inputs.DbMultiAz: "False"
+Stack.Inputs.DbStorage: "10"
+Stack.Inputs.DbInstanceType: db.t2.micro
+Stack.Inputs.DbName: casebook_api_production
+Stack.Inputs.DbUsername: casebook
+Stack.Inputs.DbPassword: AQICAHjd0+m+hAx7gz+jpQq4ecaZ0zpnuPyeR70biJmJv/nTfAHQmPP2RByG8PFnEZz8BV5vAAAAcTBvBgkqhkiG9w0BBwagYjBgAgEAMFsGCSqGSIb3DQEHATAeBglghkgBZQMEAS4wEQQM7XGAAg1wFpPnu/sgAgEQgC4TzHhl9HsasQHQs+Cp7j20o/at10i466fLUYdcG4zBA1C94eZ8Prr8xTgNga5I
+
+# Log settings
+Stack.Inputs.LogRetention: "30"
+
+# Add a global override to resources of the given type
+AWS::Logs::LogGroup:
+  DeletionPolicy: Delete
+
+AWS::RDS::DBInstance:
+  DeletionPolicy: Delete
+
+# CloudFormation custom resource settings
+Stack.Inputs.LambdaCfnKmsDecryptVersion: gi93Z9YnYB.EmU5XnDwjKUF6gFO041l9
+Stack.Inputs.LambdaCfnEcsTasksVersion: w5dOVz1QaE.bq1Y8NHceIPMo74AtZp0A
+

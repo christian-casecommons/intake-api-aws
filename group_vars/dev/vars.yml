@@ -1,10 +1,9 @@
 # STS settings
-Sts.Role: arn:aws:iam::429614120872:role/remoteAdmin
-
-Stack.Name: intake-api-dev
+Sts.Role: arn:aws:iam::334274607422:role/remoteAdmin
+Stack.Name: intake-api
 
 # Application settings
-Stack.Inputs.ApplicationKeyName: admin-shared-key
+Stack.Inputs.ApplicationKeyName: admin
 Stack.Inputs.ApplicationInstanceType: t2.micro
 Stack.Inputs.ApplicationDesiredCount: 2
 Stack.Inputs.ApplicationImageId: ami-bb75e3db
@@ -55,5 +54,6 @@ AWS::RDS::DBInstance:
   DeletionPolicy: Delete
 
 # CloudFormation custom resource settings
-Stack.Inputs.LambdaCfnKmsDecryptVersion: "86jHvErMu.CpTjqBvSlJabgr22pYGa9S"
-Stack.Inputs.LambdaCfnEcsTasksVersion: "gyujkgVKoH.NVeeuLYTi_7n_NUburwa4"
+Stack.Inputs.LambdaCfnKmsDecryptVersion: gi93Z9YnYB.EmU5XnDwjKUF6gFO041l9
+Stack.Inputs.LambdaCfnEcsTasksVersion: w5dOVz1QaE.bq1Y8NHceIPMo74AtZp0A
+
